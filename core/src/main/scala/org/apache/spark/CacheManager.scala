@@ -32,6 +32,12 @@ private[spark] class CacheManager(blockManager: BlockManager) extends Logging {
   /** Keys of RDD partitions that are being computed/loaded. */
   private val loading = new mutable.HashSet[RDDBlockId]
 
+  //当任务执行RDD.iterator()时候，会触发存储机制。
+  //1)如果RDD没有被Cache，那么执行rdd.computeOrReadCheckpoint，包装父RDD的迭代器，或者从检查点来读
+  //2)如果这个RDD被缓存，那么先到BlockManager中去查找是否寻在，如果存在，则返回迭代器；
+  //如果不存在，则先计算，然后再缓存。
+  //如果是存到内存中，则需要先展开数据，得到数据真实的长度，方便根据内存空间大小进行存储。
+  //因为RDD的计算都是惰性的，当进行迭代时，才会执行的层层包装next方法，对每一条记录进行pipeline式的处理。
   /** Gets or computes an RDD partition. Used by RDD.iterator() when an RDD is cached. */
   def getOrCompute[T](
       rdd: RDD[T],
@@ -169,6 +175,7 @@ private[spark] class CacheManager(blockManager: BlockManager) extends Logging {
        * single partition. Instead, we unroll the values cautiously, potentially aborting and
        * dropping the partition to disk if applicable.
        */
+      //展开数据，而且需要逐渐的展开，参见相关的Jira和PR
       blockManager.memoryStore.unrollSafely(key, values, updatedBlocks) match {
         case Left(arr) =>
           // We have successfully unrolled the entire partition, so cache it in memory
