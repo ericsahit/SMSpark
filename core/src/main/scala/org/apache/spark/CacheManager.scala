@@ -32,12 +32,14 @@ private[spark] class CacheManager(blockManager: BlockManager) extends Logging {
   /** Keys of RDD partitions that are being computed/loaded. */
   private val loading = new mutable.HashSet[RDDBlockId]
 
-  //当任务执行RDD.iterator()时候，会触发存储机制。
+  //当任务执行要获取RDD.iterator()时候，会触发存储机制。
   //1)如果RDD没有被Cache，那么执行rdd.computeOrReadCheckpoint，包装父RDD的迭代器，或者从检查点来读
-  //2)如果这个RDD被缓存，那么先到BlockManager中去查找是否寻在，如果存在，则返回迭代器；
-  //如果不存在，则先计算，然后再缓存。
-  //如果是存到内存中，则需要先展开数据，得到数据真实的长度，方便根据内存空间大小进行存储。
+  //2)如果这个RDD被缓存，那么先到BlockManager中去查找是否寻在：
+  //	如果存在，则返回此block的迭代器；
+  //	如果不存在，则先计算，然后再缓存。
+  //	如果是缓存到内存中，则需要先展开数据，得到数据真实的长度，方便根据内存空间大小进行存储。
   //因为RDD的计算都是惰性的，当进行迭代时，才会执行的层层包装next方法，对每一条记录进行pipeline式的处理。
+  //
   /** Gets or computes an RDD partition. Used by RDD.iterator() when an RDD is cached. */
   def getOrCompute[T](
       rdd: RDD[T],
@@ -47,7 +49,7 @@ private[spark] class CacheManager(blockManager: BlockManager) extends Logging {
 
     val key = RDDBlockId(rdd.id, partition.index)
     logDebug(s"Looking for partition $key")
-    blockManager.get(key) match {
+    blockManager.get(key) match {//这里会在本次或者远程来查找，远程查找需要跟BlockManagerMaster通信确定数据位置
       case Some(blockResult) =>
         // Partition is already materialized, so just return its values
         val inputMetrics = blockResult.inputMetrics
@@ -62,16 +64,16 @@ private[spark] class CacheManager(blockManager: BlockManager) extends Logging {
             delegate.next()
           }
         }
-      case None =>
+      case None =>//如果本地或远程都不存在Block
         // Acquire a lock for loading this partition
         // If another thread already holds the lock, wait for it to finish return its results
-        val storedValues = acquireLockForPartition[T](key)
+        val storedValues = acquireLockForPartition[T](key)//防止其他的线程正在创建此Block
         if (storedValues.isDefined) {
           return new InterruptibleIterator[T](context, storedValues.get)
         }
 
         // Otherwise, we have to load the partition ourselves
-        try {
+        try {//如果没有被缓存，则先进行计算，再尝试缓存到内存中
           logInfo(s"Partition $key not found, computing it")
           val computedValues = rdd.computeOrReadCheckpoint(partition, context)
 
@@ -80,6 +82,7 @@ private[spark] class CacheManager(blockManager: BlockManager) extends Logging {
             return computedValues
           }
 
+          //放入内存会引起其余一些Block状态变化，例如从内存中替换一些Block
           // Otherwise, cache the values and keep track of any updates in block statuses
           val updatedBlocks = new ArrayBuffer[(BlockId, BlockStatus)]
           val cachedValues = putInBlockManager(key, computedValues, storageLevel, updatedBlocks)
@@ -89,7 +92,7 @@ private[spark] class CacheManager(blockManager: BlockManager) extends Logging {
           new InterruptibleIterator(context, cachedValues)
 
         } finally {
-          loading.synchronized {
+          loading.synchronized {//计算结束后，释放loading对象，并且通知其他等待的计算线程
             loading.remove(key)
             loading.notifyAll()
           }
@@ -105,11 +108,11 @@ private[spark] class CacheManager(blockManager: BlockManager) extends Logging {
    */
   private def acquireLockForPartition[T](id: RDDBlockId): Option[Iterator[T]] = {
     loading.synchronized {
-      if (!loading.contains(id)) {
+      if (!loading.contains(id)) {//加入loading，释放锁，然后开始计算数据
         // If the partition is free, acquire its lock to compute its value
         loading.add(id)
         None
-      } else {
+      } else {//
         // Otherwise, wait for another thread to finish and return its result
         logInfo(s"Another thread is loading $id, waiting for it to finish...")
         while (loading.contains(id)) {
@@ -175,14 +178,15 @@ private[spark] class CacheManager(blockManager: BlockManager) extends Logging {
        * single partition. Instead, we unroll the values cautiously, potentially aborting and
        * dropping the partition to disk if applicable.
        */
-      //展开数据，而且需要逐渐的展开，参见相关的Jira和PR
+      //展开数据，而且需要逐渐的展开，防止内存爆掉，展开的过程中会进行block的置换（简单的循环block数组），并没有一定的策略
+      //参见相关的Jira和PR
       blockManager.memoryStore.unrollSafely(key, values, updatedBlocks) match {
-        case Left(arr) =>
+        case Left(arr) =>//可以展开，有足够空间，则存储到内存中
           // We have successfully unrolled the entire partition, so cache it in memory
           updatedBlocks ++=
             blockManager.putArray(key, arr, level, tellMaster = true, effectiveStorageLevel)
           arr.iterator.asInstanceOf[Iterator[T]]
-        case Right(it) =>
+        case Right(it) =>//空间不足，看看是否能写入到磁盘
           // There is not enough space to cache this partition in memory
           val returnValues = it.asInstanceOf[Iterator[T]]
           if (putLevel.useDisk) {

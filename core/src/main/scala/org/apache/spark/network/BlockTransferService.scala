@@ -82,6 +82,8 @@ abstract class BlockTransferService extends ShuffleClient with Closeable with Lo
    * A special case of [[fetchBlocks]], as it fetches only one block and is blocking.
    *
    * It is also only available after [[init]] is invoked.
+   * 
+   * 同步获取远程的数据块****查看具体的实现机制
    */
   def fetchBlockSync(host: String, port: Int, execId: String, blockId: String): ManagedBuffer = {
     // A monitor for the thread to wait on.
@@ -93,7 +95,7 @@ abstract class BlockTransferService extends ShuffleClient with Closeable with Lo
         }
         override def onBlockFetchSuccess(blockId: String, data: ManagedBuffer): Unit = {
           val ret = ByteBuffer.allocate(data.size.toInt)
-          ret.put(data.nioByteBuffer())
+          ret.put(data.nioByteBuffer())//****这里为什么要进行buffer的数据拷贝，不重用返回的nioByteBuffer？
           ret.flip()
           result.success(new NioManagedBuffer(ret))
         }

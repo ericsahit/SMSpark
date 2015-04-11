@@ -77,6 +77,7 @@ private[spark] class MemoryStore(blockManager: BlockManager, maxMemory: Long)
     }
   }
 
+  //存储序列化的数组
   override def putBytes(blockId: BlockId, _bytes: ByteBuffer, level: StorageLevel): PutResult = {
     // Work on a duplicate - since the original input might be used elsewhere.
     val bytes = _bytes.duplicate()
@@ -90,6 +91,7 @@ private[spark] class MemoryStore(blockManager: BlockManager, maxMemory: Long)
     }
   }
 
+  //存放对象数组，没有序列化
   override def putArray(
       blockId: BlockId,
       values: Array[Any],
@@ -125,6 +127,9 @@ private[spark] class MemoryStore(blockManager: BlockManager, maxMemory: Long)
    * One scenario in which `allowPersistToDisk` is false is when the BlockManager reads a block
    * back from disk and attempts to cache it in memory. In this case, we should not persist the
    * block back on disk again, as it is already in disk store.
+   * 
+   * 存储对象迭代器，可能是还没有被反序列化出来的ByteBuffer，只被dataDeserialize包装了一下反序列化的流
+   * 因为反序列化可以是惰性的，每当迭代获取next时候从ObjectInputStream中读取一个对象。可以参考dataDeserialize函数
    */
   private[storage] def putIterator(
       blockId: BlockId,
@@ -382,9 +387,9 @@ private[spark] class MemoryStore(blockManager: BlockManager, maxMemory: Long)
 
     // Take into account the amount of memory currently occupied by unrolling blocks
     val actualFreeMemory = freeMemory - currentUnrollMemory
-
+    //如果需要的空间大于实际空余的空间
     if (actualFreeMemory < space) {
-      val rddToAdd = getRddId(blockIdToAdd)
+      val rddToAdd = getRddId(blockIdToAdd)//block对应的RDDId
       val selectedBlocks = new ArrayBuffer[BlockId]
       var selectedMemory = 0L
 
@@ -393,17 +398,17 @@ private[spark] class MemoryStore(blockManager: BlockManager, maxMemory: Long)
       // can lead to exceptions.
       entries.synchronized {
         val iterator = entries.entrySet().iterator()
-        while (actualFreeMemory + selectedMemory < space && iterator.hasNext) {
+        while (actualFreeMemory + selectedMemory < space && iterator.hasNext) {//按照默认的顺序来选择要置换的Block，并没有按照LRU
           val pair = iterator.next()
           val blockId = pair.getKey
-          if (rddToAdd.isEmpty || rddToAdd != getRddId(blockId)) {
+          if (rddToAdd.isEmpty || rddToAdd != getRddId(blockId)) {//不能置换本RDD的Block，尽量保证本RDD的block都在内存中
             selectedBlocks += blockId
             selectedMemory += pair.getValue.size
           }
         }
       }
 
-      if (actualFreeMemory + selectedMemory >= space) {
+      if (actualFreeMemory + selectedMemory >= space) {//如果选择出block的长度和加上实际内存>要申请的空间
         logInfo(s"${selectedBlocks.size} blocks selected for dropping")
         for (blockId <- selectedBlocks) {
           val entry = entries.synchronized { entries.get(blockId) }
@@ -411,17 +416,18 @@ private[spark] class MemoryStore(blockManager: BlockManager, maxMemory: Long)
           // blocks and removing entries. However the check is still here for
           // future safety.
           if (entry != null) {
-            val data = if (entry.deserialized) {
+            val data = if (entry.deserialized) {//数据是否被序列化，deserialized代表没被序列化，存的Array[T]
               Left(entry.value.asInstanceOf[Array[Any]])
             } else {
               Right(entry.value.asInstanceOf[ByteBuffer].duplicate())
             }
+            //从内存中移除block
             val droppedBlockStatus = blockManager.dropFromMemory(blockId, data)
             droppedBlockStatus.foreach { status => droppedBlocks += ((blockId, status)) }
           }
         }
         return ResultWithDroppedBlocks(success = true, droppedBlocks)
-      } else {
+      } else {//把所有非本RDD的block都替换掉也不能满足空间需求的情况下
         logInfo(s"Will not store $blockIdToAdd as it would require dropping another block " +
           "from the same RDD")
         return ResultWithDroppedBlocks(success = false, droppedBlocks)

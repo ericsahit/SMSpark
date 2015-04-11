@@ -453,7 +453,7 @@ private[spark] class BlockManager(
   }
 
   private def doGetLocal(blockId: BlockId, asBlockResult: Boolean): Option[Any] = {
-    val info = blockInfo.get(blockId).orNull
+    val info = blockInfo.get(blockId).orNull //本地的BlockId到BlockInfo的映射
     if (info != null) {
       info.synchronized {
         // Double check to make sure the block is still there. There is a small chance that the
@@ -467,7 +467,7 @@ private[spark] class BlockManager(
         }
 
         // If another thread is writing the block, wait for it to become ready.
-        if (!info.waitForReady()) {
+        if (!info.waitForReady()) {//BlockInfo标记了是否有另一个线程在写Block
           // If we get here, the block write failed.
           logWarning(s"Block $blockId was marked as failure.")
           return None
@@ -521,7 +521,7 @@ private[spark] class BlockManager(
           }
           assert(0 == bytes.position())
 
-          if (!level.useMemory) {
+          if (!level.useMemory) {//如果level不含有memory，则直接返回
             // If the block shouldn't be stored in memory, we can just return it
             if (asBlockResult) {
               return Some(new BlockResult(dataDeserialize(blockId, bytes), DataReadMethod.Disk,
@@ -529,13 +529,13 @@ private[spark] class BlockManager(
             } else {
               return Some(bytes)
             }
-          } else {
+          } else {//如果level中含有memory，则把数据同时放到内存中（一般是以前空间不足退化到磁盘的Block）
             // Otherwise, we also have to store something in the memory store
-            if (!level.deserialized || !asBlockResult) {
+            if (!level.deserialized || !asBlockResult) {//如果是序列化级别，直接把ByteBuffer存入到memory中
               /* We'll store the bytes in memory if the block's storage level includes
                * "memory serialized", or if it should be cached as objects in memory
                * but we only requested its serialized bytes. */
-              val copyForMemory = ByteBuffer.allocate(bytes.limit)
+              val copyForMemory = ByteBuffer.allocate(bytes.limit)//这里会引起一次内存的复制，是必要的吗？
               copyForMemory.put(bytes)
               memoryStore.putBytes(blockId, copyForMemory, level)
               bytes.rewind()
@@ -546,7 +546,7 @@ private[spark] class BlockManager(
               val values = dataDeserialize(blockId, bytes)
               if (level.deserialized) {
                 // Cache the values before returning them
-                val putResult = memoryStore.putIterator(
+                val putResult = memoryStore.putIterator(//存储对象数组，这里是一个反序列化的迭代器
                   blockId, values, level, returnValues = true, allowPersistToDisk = false)
                 // The put may or may not have succeeded, depending on whether there was enough
                 // space to unroll the block. Either way, the put here should return an iterator.
@@ -586,10 +586,13 @@ private[spark] class BlockManager(
     doGetRemote(blockId, asBlockResult = false).asInstanceOf[Option[ByteBuffer]]
   }
 
+  /**
+   * 获取RDD的Block，也会从远程来获取数据，这里是同步拉取数据，可以测试所用时间
+   */
   private def doGetRemote(blockId: BlockId, asBlockResult: Boolean): Option[Any] = {
     require(blockId != null, "BlockId is null")
-    val locations = Random.shuffle(master.getLocations(blockId))
-    for (loc <- locations) {
+    val locations = Random.shuffle(master.getLocations(blockId))//从BlockManagerMaster获取block的位置，并打乱位置
+    for (loc <- locations) {//****这里是否可以根据远程节点的负载等情况来优化获取位置，不过通常这里只在一台节点上存在Block数据
       logDebug(s"Getting remote block $blockId from $loc")
       val data = blockTransferService.fetchBlockSync(
         loc.host, loc.port, loc.executorId, blockId.toString).nioByteBuffer()
