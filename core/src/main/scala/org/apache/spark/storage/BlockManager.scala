@@ -76,6 +76,7 @@ private[spark] class BlockManager(
     numUsableCores: Int)
   extends BlockDataManager with Logging {
 
+  //DiskBlockManager主要负责维护BlockId和物理文件之间的映射，TachyonBlockManager也同样是
   val diskBlockManager = new DiskBlockManager(this, conf)
 
   private val blockInfo = new TimeStampedHashMap[BlockId, BlockInfo]
@@ -136,6 +137,8 @@ private[spark] class BlockManager(
   // Whether to compress shuffle output temporarily spilled to disk
   private val compressShuffleSpill = conf.getBoolean("spark.shuffle.spill.compress", true)
 
+  //BlockManagerSlave（Executor）的actor
+  //****新建SharedMemoryStore的slaveActor
   private val slaveActor = actorSystem.actorOf(
     Props(new BlockManagerSlaveActor(this, mapOutputTracker)),
     name = "BlockManagerActor" + BlockManager.ID_GENERATOR.next)
@@ -202,6 +205,7 @@ private[spark] class BlockManager(
       blockManagerId
     }
 
+    //通信：与master通信，注册自身，master运行在Driver程序上
     master.registerBlockManager(blockManagerId, maxMemory, slaveActor)
 
     // Register Executors' configuration with the local shuffle service, if one should exist.
@@ -245,6 +249,7 @@ private[spark] class BlockManager(
    * heart beat attempt or new block registration and another try to re-register all blocks
    * will be made then.
    */
+  //通信：将所有Block的情况告诉Block
   private def reportAllBlocks(): Unit = {
     logInfo(s"Reporting ${blockInfo.size} blocks to the master.")
     for ((blockId, info) <- blockInfo) {
@@ -265,6 +270,7 @@ private[spark] class BlockManager(
   def reregister(): Unit = {
     // TODO: We might need to rate limit re-registering.
     logInfo("BlockManager re-registering with master")
+    //通信：重新注册
     master.registerBlockManager(blockManagerId, maxMemory, slaveActor)
     reportAllBlocks()
   }
@@ -298,6 +304,8 @@ private[spark] class BlockManager(
   /**
    * Interface to get local block data. Throws an exception if the block cannot be found or
    * cannot be read successfully.
+   * 得到非asBlockResult的bytes数据的Block
+   * 一般在远程获取Block数据时候使用。例如：BlockTransferService，NettyBlockRpcServer
    */
   override def getBlockData(blockId: BlockId): ManagedBuffer = {
     if (blockId.isShuffle) {
@@ -316,6 +324,8 @@ private[spark] class BlockManager(
 
   /**
    * Put the block locally, using the given storage level.
+   * 
+   * 将Block放到本地，一般也是远程进行调用
    */
   override def putBlockData(blockId: BlockId, data: ManagedBuffer, level: StorageLevel): Unit = {
     putBytes(blockId, data.nioByteBuffer(), level)
@@ -381,6 +391,7 @@ private[spark] class BlockManager(
       val inMemSize = Math.max(status.memSize, droppedMemorySize)
       val inTachyonSize = status.tachyonSize
       val onDiskSize = status.diskSize
+      //通信：汇报当前Block的状态，实际是传递了一个updateBlockInfo信息
       master.updateBlockInfo(
         blockManagerId, blockId, storageLevel, inMemSize, onDiskSize, inTachyonSize)
     } else {
@@ -418,6 +429,7 @@ private[spark] class BlockManager(
    */
   private def getLocationBlockIds(blockIds: Array[BlockId]): Array[Seq[BlockManagerId]] = {
     val startTimeMs = System.currentTimeMillis
+    //通信：与master通信，获得所需要block所在的节点位置
     val locations = master.getLocations(blockIds).toArray
     logDebug("Got multiple block location in %s".format(Utils.getUsedTimeMs(startTimeMs)))
     locations
@@ -496,6 +508,20 @@ private[spark] class BlockManager(
         if (level.useOffHeap) {
           logDebug(s"Getting block $blockId from tachyon")
           if (tachyonStore.contains(blockId)) {
+            //****如果是RDD获取，则推迟获取数据到iterator.next()时候，减少一次内存的拷贝
+            //look for block in memory style, reduce 
+            val result = if (asBlockResult) {
+              tachyonStore.getValues(blockId).map(new BlockResult(_, DataReadMethod.Memory, info.size))
+            } else {
+              tachyonStore.getBytes(blockId)
+            }
+            result match {
+              case Some(values) =>
+                return result
+              case None =>
+                logDebug(s"Block $blockId not found in tachyon")
+            }
+            
             tachyonStore.getBytes(blockId) match {
               case Some(bytes) =>
                 if (!asBlockResult) {
@@ -535,6 +561,7 @@ private[spark] class BlockManager(
               /* We'll store the bytes in memory if the block's storage level includes
                * "memory serialized", or if it should be cached as objects in memory
                * but we only requested its serialized bytes. */
+              //磁盘读入的Buffer是映射buffer或者ByteBuffer（小文件直接读取）
               val copyForMemory = ByteBuffer.allocate(bytes.limit)//这里会引起一次内存的复制，是必要的吗？
               copyForMemory.put(bytes)
               memoryStore.putBytes(blockId, copyForMemory, level)
@@ -588,6 +615,7 @@ private[spark] class BlockManager(
 
   /**
    * 获取RDD的Block，也会从远程来获取数据，这里是同步拉取数据，可以测试所用时间
+   * 这里返回了一个Nio.ByteBuffer
    */
   private def doGetRemote(blockId: BlockId, asBlockResult: Boolean): Option[Any] = {
     require(blockId != null, "BlockId is null")
@@ -832,6 +860,7 @@ private[spark] class BlockManager(
 
     // Either we're storing bytes and we asynchronously started replication, or we're storing
     // values and need to serialize and replicate them now:
+    // 如果副本数量大于1，则会有一个远程的复制操作
     if (putLevel.replication > 1) {
       data match {
         case ByteBufferValues(bytes) =>
@@ -886,6 +915,9 @@ private[spark] class BlockManager(
   /**
    * Replicate block to another node. Not that this is a blocking call that returns after
    * the block has been replicated.
+   * 
+   * 进程数据复制的操作，向远程的Executor拷贝数据，这里涉及到远程节点数据是否满等问题
+   * 远程传输时候可以参考
    */
   private def replicate(blockId: BlockId, data: ByteBuffer, level: StorageLevel): Unit = {
     val maxReplicationFailures = conf.getInt("spark.storage.maxReplicationFailures", 1)
@@ -943,7 +975,7 @@ private[spark] class BlockManager(
             val onePeerStartTime = System.currentTimeMillis
             data.rewind()
             logTrace(s"Trying to replicate $blockId of ${data.limit()} bytes to $peer")
-            blockTransferService.uploadBlockSync(
+            blockTransferService.uploadBlockSync(//向远程节点传输数据
               peer.host, peer.port, peer.executorId, blockId, new NioManagedBuffer(data), tLevel)
             logTrace(s"Replicated $blockId of ${data.limit()} bytes to $peer in %s ms"
               .format(System.currentTimeMillis - onePeerStartTime))
@@ -1184,6 +1216,7 @@ private[spark] class BlockManager(
       blockId: BlockId,
       values: Iterator[Any],
       serializer: Serializer = defaultSerializer): ByteBuffer = {
+     //TODO: ****这里的4096=4KB太小了，每次都要做数组的扩展拷贝，能否直接设置一个大一点的缓冲区
     val byteStream = new ByteArrayOutputStream(4096)
     dataSerializeStream(blockId, byteStream, values, serializer)
     ByteBuffer.wrap(byteStream.toByteArray)
@@ -1199,6 +1232,20 @@ private[spark] class BlockManager(
       serializer: Serializer = defaultSerializer): Iterator[Any] = {
     bytes.rewind()
     val stream = wrapForCompression(blockId, new ByteBufferInputStream(bytes, true))
+    serializer.newInstance().deserializeStream(stream).asIterator
+  }
+  
+  /**
+   * Deserializes a InputStream into an iterator of values and disposes of it when the end of
+   * the iterator is reached.
+   * 
+   * 新加的支持InputStream的返序列化
+   */
+  def dataDeserialize(
+      blockId: BlockId,
+      inputStream: InputStream,
+      serializer: Serializer = defaultSerializer): Iterator[Any] = {
+    val stream = wrapForCompression(blockId, inputStream)
     serializer.newInstance().deserializeStream(stream).asIterator
   }
 

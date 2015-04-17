@@ -40,6 +40,8 @@ private[spark] class CacheManager(blockManager: BlockManager) extends Logging {
   //	如果是缓存到内存中，则需要先展开数据，得到数据真实的长度，方便根据内存空间大小进行存储。
   //因为RDD的计算都是惰性的，当进行迭代时，才会执行的层层包装next方法，对每一条记录进行pipeline式的处理。
   //
+  //这里也传入了Task
+  //
   /** Gets or computes an RDD partition. Used by RDD.iterator() when an RDD is cached. */
   def getOrCompute[T](
       rdd: RDD[T],
@@ -50,12 +52,12 @@ private[spark] class CacheManager(blockManager: BlockManager) extends Logging {
     val key = RDDBlockId(rdd.id, partition.index)
     logDebug(s"Looking for partition $key")
     blockManager.get(key) match {//这里会在本次或者远程来查找，远程查找需要跟BlockManagerMaster通信确定数据位置
-      case Some(blockResult) =>
+      case Some(blockResult) =>//****为什么会出现Network远程拉去数据，是否没有利用到Block的本地性？
         // Partition is already materialized, so just return its values
         val inputMetrics = blockResult.inputMetrics
         val existingMetrics = context.taskMetrics
-          .getInputMetricsForReadMethod(inputMetrics.readMethod)
-        existingMetrics.incBytesRead(inputMetrics.bytesRead)
+          .getInputMetricsForReadMethod(inputMetrics.readMethod) //SparkUI中task的input，memory或network
+        existingMetrics.incBytesRead(inputMetrics.bytesRead)//输入的数据量
 
         val iter = blockResult.data.asInstanceOf[Iterator[T]]
         new InterruptibleIterator[T](context, iter) {

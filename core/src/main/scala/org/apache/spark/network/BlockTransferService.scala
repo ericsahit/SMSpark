@@ -34,6 +34,8 @@ abstract class BlockTransferService extends ShuffleClient with Closeable with Lo
   /**
    * Initialize the transfer service by giving it the BlockDataManager that can be used to fetch
    * local blocks or put local blocks.
+   * 
+   * 有Nio和Netty两种实现
    */
   def init(blockDataManager: BlockDataManager)
 
@@ -95,7 +97,7 @@ abstract class BlockTransferService extends ShuffleClient with Closeable with Lo
         }
         override def onBlockFetchSuccess(blockId: String, data: ManagedBuffer): Unit = {
           val ret = ByteBuffer.allocate(data.size.toInt)
-          ret.put(data.nioByteBuffer())//****这里为什么要进行buffer的数据拷贝，不重用返回的nioByteBuffer？
+          ret.put(data.nioByteBuffer())//****这里为什么要进行buffer的数据拷贝，不重用返回的nioByteBuffer？原因之一应该是先拷贝到本地比较安全
           ret.flip()
           result.success(new NioManagedBuffer(ret))
         }

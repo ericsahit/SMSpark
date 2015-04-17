@@ -61,6 +61,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val actorSyste
     conf.getInt("spark.scheduler.maxRegisteredResourcesWaitingTime", 30000)
   val createTime = System.currentTimeMillis()
 
+  //Executor的id和属性的映射
   private val executorDataMap = new HashMap[String, ExecutorData]
 
   // Number of executors requested from the cluster manager that have not registered yet
@@ -164,6 +165,9 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val actorSyste
 
     // Make fake resource offers on all executors
     def makeOffers() {
+      //Driver来给Executor分配任务，其中scheduler 就是 TaskSchedulerImpl
+      //scheduler.resourceOffers()从从 FIFO 或者 Fair 调度器那里获得排序后的 TaskSetManager
+      //并经过TaskSchedulerImpl.resourceOffer()，考虑 locality 等因素来确定 task 的全部信息 TaskDescription。
       launchTasks(scheduler.resourceOffers(executorDataMap.map { case (id, executorData) =>
         new WorkerOffer(id, executorData.executorHost, executorData.freeCores)
       }.toSeq))
@@ -177,7 +181,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val actorSyste
     }
 
     // Launch tasks returned by a set of resource offers
-    def launchTasks(tasks: Seq[Seq[TaskDescription]]) {
+    def launchTasks(tasks: Seq[Seq[TaskDescription]]) {//序列化任务并且执行
       for (task <- tasks.flatten) {
         val ser = SparkEnv.get.closureSerializer.newInstance()
         val serializedTask = ser.serialize(task)
@@ -199,6 +203,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val actorSyste
         else {
           val executorData = executorDataMap(task.executorId)
           executorData.freeCores -= scheduler.CPUS_PER_TASK
+          //分发序列化后的任务
           executorData.executorActor ! LaunchTask(new SerializableBuffer(serializedTask))
         }
       }

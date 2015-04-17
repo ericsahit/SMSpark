@@ -64,8 +64,10 @@ private[spark] class ShuffleMapTask(
     var writer: ShuffleWriter[Any, Any] = null
     try {
       val manager = SparkEnv.get.shuffleManager
+      //shuffleWriter中含有taskContext的引用
       writer = manager.getWriter[Any, Any](dep.shuffleHandle, partitionId, context)
-      //这里执行Task的时候，会调用RDD.iterator
+      //这里执行Task的时候，会调用RDD.iterator，在write方法内，会调用iterator.next方法
+      //调用itertor进行迭代计算的时候，也会持有context方法
       writer.write(rdd.iterator(partition, context).asInstanceOf[Iterator[_ <: Product2[Any, Any]]])
       return writer.stop(success = true).get
     } catch {

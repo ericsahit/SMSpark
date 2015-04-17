@@ -96,10 +96,35 @@ private[spark] class TachyonStore(
     }
   }
 
+//  override def getValues(blockId: BlockId): Option[Iterator[Any]] = {
+//    getBytes(blockId).map(buffer => blockManager.dataDeserialize(blockId, buffer))
+//  }
+  
+  /**
+   * 修改过后的getValues方法，在BlockManager中调用
+   * 减少了一次内存复制
+   * NextIterator will automatically close the inputStream when iterator reach the last
+   */
   override def getValues(blockId: BlockId): Option[Iterator[Any]] = {
-    getBytes(blockId).map(buffer => blockManager.dataDeserialize(blockId, buffer))
+    val file = tachyonManager.getFile(blockId)
+    if (file == null || file.getLocationHosts().size() == 0) {
+      return None
+    }
+    val is = file.getInStream(ReadType.CACHE)
+    assert(is != null)
+    try {
+      return Some(blockManager.dataDeserialize(blockId, is))
+    } catch {
+      case ioe: IOException =>
+        logWarning(s"Failed to fetch the block $blockId from Tachyon", ioe)
+        None
+    } finally {
+      //is.close()
+    }
   }
 
+  //BlockManager使用这个方法来得到数据
+  //这里其实可以减少一次内存复制，直接将InputStream返回给BlockManager，然后包装来返回itertor
   override def getBytes(blockId: BlockId): Option[ByteBuffer] = {
     val file = tachyonManager.getFile(blockId)
     if (file == null || file.getLocationHosts.size == 0) {

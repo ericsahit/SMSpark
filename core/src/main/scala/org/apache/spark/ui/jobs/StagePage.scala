@@ -469,10 +469,10 @@ private[ui] class StagePage(parent: StagesTab) extends WebUIPage("stage") {
 
       val maybeInput = metrics.flatMap(_.inputMetrics)
       val inputSortable = maybeInput.map(_.bytesRead.toString).getOrElse("")
-      val inputReadable = maybeInput
+      val inputReadable = maybeInput//****SparkUI中监控页面中，Taks的详细数据获取Inputs
         .map(m => s"${Utils.bytesToString(m.bytesRead)} (${m.readMethod.toString.toLowerCase()})")
         .getOrElse("")
-      val inputRecords = maybeInput.map(_.recordsRead.toString).getOrElse("")
+      val inputRecords = maybeInput.map(_.recordsRead.toString).getOrElse("")//取inputRecords或inputReadable作为输入数据
 
       val maybeOutput = metrics.flatMap(_.outputMetrics)
       val outputSortable = maybeOutput.map(_.bytesWritten.toString).getOrElse("")
@@ -555,7 +555,7 @@ private[ui] class StagePage(parent: StagesTab) extends WebUIPage("stage") {
             {Unparsed(accumulatorsReadable.mkString("<br/>"))}
           </td>
         }}
-        {if (hasInput) {
+        {if (hasInput) {//****Input的数据
           <td sorttable_customkey={inputSortable}>
             {s"$inputReadable / $inputRecords"}
           </td>

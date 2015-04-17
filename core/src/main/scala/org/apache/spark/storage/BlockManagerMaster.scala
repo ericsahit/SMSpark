@@ -30,7 +30,7 @@ private[spark]
 class BlockManagerMaster(
     var driverActor: ActorRef,
     conf: SparkConf,
-    isDriver: Boolean)
+    isDriver: Boolean) //包含了Driver和Executor端的actor逻辑，通过isDriver来判断
   extends Logging {
   private val AKKA_RETRY_ATTEMPTS: Int = AkkaUtils.numRetries(conf)
   private val AKKA_RETRY_INTERVAL_MS: Int = AkkaUtils.retryWaitMs(conf)
@@ -45,6 +45,7 @@ class BlockManagerMaster(
     logInfo("Removed " + execId + " successfully in removeExecutor")
   }
 
+  //BlockManager调用，executor向Driver注册自身，初始化时候注册
   /** Register the BlockManager's id with the driver. */
   def registerBlockManager(blockManagerId: BlockManagerId, maxMemSize: Long, slaveActor: ActorRef) {
     logInfo("Trying to register BlockManager")

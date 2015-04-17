@@ -302,10 +302,13 @@ object SparkEnv extends Logging {
           new NioBlockTransferService(conf, securityManager)
       }
 
+    //新建BlockManagerMaster，是一个DriverActorRef的包装
+    //第一个参数是driverActor: ActorRef,
     val blockManagerMaster = new BlockManagerMaster(registerOrLookup(
       "BlockManagerMaster",
       new BlockManagerMasterActor(isLocal, conf, listenerBus)), conf, isDriver)
 
+    //SparkEnv里新建BlockManager，这里把BlockManagerMaster传递进去
     // NB: blockManager is not valid until initialize() is called later.
     val blockManager = new BlockManager(executorId, actorSystem, blockManagerMaster,
       serializer, conf, mapOutputTracker, shuffleManager, blockTransferService, securityManager,

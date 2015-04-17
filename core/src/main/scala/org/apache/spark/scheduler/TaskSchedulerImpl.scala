@@ -153,7 +153,9 @@ private[spark] class TaskSchedulerImpl(
   override def postStartHook() {
     waitBackendReady()
   }
-
+  //提交一个Stage内的任务
+  //在任务提交的同时会启动定时器，如果任务还未被执行，定时器持续发出警告直到任务被执行。
+  //同时会调用CoarseGrainedSchedulerBackend的reviveOffers()，而它则会通过actor向driver发送ReviveOffers，driver收到ReviveOffers后调用makeOffers()：
   override def submitTasks(taskSet: TaskSet) {
     val tasks = taskSet.tasks
     logInfo("Adding task set " + taskSet.id + " with " + tasks.length + " tasks")
@@ -177,6 +179,7 @@ private[spark] class TaskSchedulerImpl(
       }
       hasReceivedTask = true
     }
+    //后端通信，分发任务
     backend.reviveOffers()
   }
 
@@ -224,13 +227,13 @@ private[spark] class TaskSchedulerImpl(
       availableCpus: Array[Int],
       tasks: Seq[ArrayBuffer[TaskDescription]]) : Boolean = {
     var launchedTask = false
-    for (i <- 0 until shuffledOffers.size) {
+    for (i <- 0 until shuffledOffers.size) {//遍历每一个可用的executor
       val execId = shuffledOffers(i).executorId
       val host = shuffledOffers(i).host
-      if (availableCpus(i) >= CPUS_PER_TASK) {
+      if (availableCpus(i) >= CPUS_PER_TASK) {//如果可用的cpu大于一个任务
         try {
-          for (task <- taskSet.resourceOffer(execId, host, maxLocality)) {
-            tasks(i) += task
+          for (task <- taskSet.resourceOffer(execId, host, maxLocality)) {//具体的任务调度算法在resourceOffer方法中
+            tasks(i) += task//可以调度到当前Executor的task列表
             val tid = task.taskId
             taskIdToTaskSetId(tid) = taskSet.taskSet.id
             taskIdToExecutorId(tid) = execId
@@ -255,6 +258,10 @@ private[spark] class TaskSchedulerImpl(
    * Called by cluster manager to offer resources on slaves. We respond by asking our active task
    * sets for tasks in order of priority. We fill each node with tasks in a round-robin manner so
    * that tasks are balanced across the cluster.
+   * 
+   * 这个方法是调度Task的核心方法，选择了调度哪个Task到哪个Executor上
+   * WorkerOffer：可以调度到哪个worker上
+   * WorkerOffer：new WorkerOffer(id, executorData.executorHost, executorData.freeCores)
    */
   def resourceOffers(offers: Seq[WorkerOffer]): Seq[Seq[TaskDescription]] = synchronized {
     // Mark each slave as alive and remember its hostname
@@ -274,7 +281,7 @@ private[spark] class TaskSchedulerImpl(
     }
 
     // Randomly shuffle offers to avoid always placing tasks on the same set of workers.
-    val shuffledOffers = Random.shuffle(offers)
+    val shuffledOffers = Random.shuffle(offers)//将worker洗牌，防止每次都将资源分配给前几个worker
     // Build a list of tasks to assign to each worker.
     val tasks = shuffledOffers.map(o => new ArrayBuffer[TaskDescription](o.cores))
     val availableCpus = shuffledOffers.map(o => o.cores).toArray
@@ -292,7 +299,7 @@ private[spark] class TaskSchedulerImpl(
     // NOTE: the preferredLocality order: PROCESS_LOCAL, NODE_LOCAL, NO_PREF, RACK_LOCAL, ANY
     var launchedTask = false
     for (taskSet <- sortedTaskSets; maxLocality <- taskSet.myLocalityLevels) {
-      do {
+      do {//遍历每一个TaskSet，对每一个TaskSet进行分配，结果存储到tasks里
         launchedTask = resourceOfferSingleTaskSet(
             taskSet, maxLocality, shuffledOffers, availableCpus, tasks)
       } while (launchedTask)

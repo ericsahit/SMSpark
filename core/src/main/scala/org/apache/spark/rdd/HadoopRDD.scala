@@ -216,7 +216,7 @@ class HadoopRDD[K, V](
       val jobConf = getJobConf()
 
       val inputMetrics = context.taskMetrics
-        .getInputMetricsForReadMethod(DataReadMethod.Hadoop)
+        .getInputMetricsForReadMethod(DataReadMethod.Hadoop)//这里设置了input为Hadoop，就是说input为Hadoop时候还需要从HDFS文件系统中读数据
 
       // Find a function that will return the FileSystem bytes read by this thread. Do this before
       // creating RecordReader, because RecordReader's constructor might read some bytes
@@ -248,7 +248,7 @@ class HadoopRDD[K, V](
             finished = true
         }
         if (!finished) {
-          inputMetrics.incRecordsRead(1)
+          inputMetrics.incRecordsRead(1)//这里每读一条记录，就会增加一次recordRead+1
         }
         (key, value)
       }
@@ -257,7 +257,7 @@ class HadoopRDD[K, V](
         try {
           reader.close()
           if (bytesReadCallback.isDefined) {
-            inputMetrics.updateBytesRead()
+            inputMetrics.updateBytesRead()//可以监控到需要读取多少字节
           } else if (split.inputSplit.value.isInstanceOf[FileSplit] ||
                      split.inputSplit.value.isInstanceOf[CombineFileSplit]) {
             // If we can't get the bytes read from the FS stats, fall back to the split size,

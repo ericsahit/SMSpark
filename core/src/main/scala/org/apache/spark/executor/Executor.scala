@@ -200,6 +200,7 @@ private[spark] class Executor(
 
         // Run the actual task and measure its runtime.
         taskStart = System.currentTimeMillis()
+        //运行任务，实际执行的是runTask(context)，会根据任务类型的不同实现具体的runTask方法
         val value = task.run(taskAttemptId = taskId, attemptNumber = attemptNumber)
         val taskFinish = System.currentTimeMillis()
 
@@ -228,15 +229,15 @@ private[spark] class Executor(
 
         // directSend = sending directly back to the driver
         val serializedResult = {
-          if (maxResultSize > 0 && resultSize > maxResultSize) {
+          if (maxResultSize > 0 && resultSize > maxResultSize) {//结果很大（默认大于1GB），则不存到存储中，会抛弃？
             logWarning(s"Finished $taskName (TID $taskId). Result is larger than maxResultSize " +
               s"(${Utils.bytesToString(resultSize)} > ${Utils.bytesToString(maxResultSize)}), " +
               s"dropping it.")
             ser.serialize(new IndirectTaskResult[Any](TaskResultBlockId(taskId), resultSize))
-          } else if (resultSize >= akkaFrameSize - AkkaUtils.reservedSizeBytes) {
+          } else if (resultSize >= akkaFrameSize - AkkaUtils.reservedSizeBytes) {//这样的大小，会通过BlockManager来发送回Driver，也属于IndirectTaskResult
             val blockId = TaskResultBlockId(taskId)
             env.blockManager.putBytes(
-              blockId, serializedDirectResult, StorageLevel.MEMORY_AND_DISK_SER)
+              blockId, serializedDirectResult, StorageLevel.MEMORY_AND_DISK_SER)//****这里也会将TaskResultBlockId存放到Memory中
             logInfo(
               s"Finished $taskName (TID $taskId). $resultSize bytes result sent via BlockManager)")
             ser.serialize(new IndirectTaskResult[Any](blockId, resultSize))

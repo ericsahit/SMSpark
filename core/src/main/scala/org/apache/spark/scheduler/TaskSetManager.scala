@@ -186,12 +186,12 @@ private[spark] class TaskSetManager(
       }
     }
 
-    for (loc <- tasks(index).preferredLocations) {
+    for (loc <- tasks(index).preferredLocations) {//按照task的preferredLocation，加入到
       loc match {
         case e: ExecutorCacheTaskLocation =>
           addTo(pendingTasksForExecutor.getOrElseUpdate(e.executorId, new ArrayBuffer))
         case e: HDFSCacheTaskLocation => {
-          val exe = sched.getExecutorsAliveOnHost(loc.host)
+          val exe = sched.getExecutorsAliveOnHost(loc.host)//查看任务所在host上是否是否存在当前job的executor
           exe match {
             case Some(set) => {
               for (e <- set) {
@@ -206,7 +206,7 @@ private[spark] class TaskSetManager(
         }
         case _ => Unit
       }
-      addTo(pendingTasksForHost.getOrElseUpdate(loc.host, new ArrayBuffer))
+      addTo(pendingTasksForHost.getOrElseUpdate(loc.host, new ArrayBuffer)) //将task加入到host level的列表中
       for (rack <- sched.getRackForHost(loc.host)) {
         addTo(pendingTasksForRack.getOrElseUpdate(rack, new ArrayBuffer))
       }
@@ -372,6 +372,7 @@ private[spark] class TaskSetManager(
   private def dequeueTask(execId: String, host: String, maxLocality: TaskLocality.Value)
     : Option[(Int, TaskLocality.Value, Boolean)] =
   {
+    //得到当前executor上的task，preferredLocation中包含当前的executor
     for (index <- dequeueTaskFromList(execId, getPendingTasksForExecutor(execId))) {
       return Some((index, TaskLocality.PROCESS_LOCAL, false))
     }
@@ -415,6 +416,8 @@ private[spark] class TaskSetManager(
    * NOTE: this function is either called with a maxLocality which
    * would be adjusted by delay scheduling algorithm or it will be with a special
    * NO_PREF locality which will be not modified
+   * 
+   * 实际调度TaskSet内任务的方法，会有Delay Scheduling
    *
    * @param execId the executor Id of the offered resource
    * @param host  the host Id of the offered resource

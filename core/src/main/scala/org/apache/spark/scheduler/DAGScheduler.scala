@@ -193,7 +193,7 @@ class DAGScheduler(
     // Note: this doesn't use `getOrElse()` because this method is called O(num tasks) times
     if (!cacheLocs.contains(rdd.id)) {
       val blockIds = rdd.partitions.indices.map(index => RDDBlockId(rdd.id, index)).toArray[BlockId]
-      val locs = BlockManager.blockIdsToBlockManagers(blockIds, env, blockManagerMaster)
+      val locs = BlockManager.blockIdsToBlockManagers(blockIds, env, blockManagerMaster)//得到Cached RDD的Block位置
       cacheLocs(rdd.id) = blockIds.map { id =>
         locs.getOrElse(id, Nil).map(bm => TaskLocation(bm.host, bm.executorId))
       }
@@ -283,6 +283,9 @@ class DAGScheduler(
   /**
    * Get or create the list of parent stages for a given RDD. The stages will be assigned the
    * provided jobId if they haven't already been created with a lower jobId.
+   * 
+   * 这个方法根据RDD的Dependency类型，来分割为不同的Stage
+   * 使用一个stack来递归遍历
    */
   private def getParentStages(rdd: RDD[_], jobId: Int): List[Stage] = {
     val parents = new HashSet[Stage]
@@ -298,9 +301,9 @@ class DAGScheduler(
         for (dep <- r.dependencies) {
           dep match {
             case shufDep: ShuffleDependency[_, _, _] =>
-              parents += getShuffleMapStage(shufDep, jobId)
+              parents += getShuffleMapStage(shufDep, jobId)//如果是shuffleDependency，则加到parents stage中
             case _ =>
-              waitingForVisit.push(dep.rdd)
+              waitingForVisit.push(dep.rdd)//如果不是，则还是当前stage，则把父的RDD放到stack中，继续向上回溯
           }
         }
       }
@@ -366,7 +369,7 @@ class DAGScheduler(
     def visit(rdd: RDD[_]) {
       if (!visited(rdd)) {
         visited += rdd
-        if (getCacheLocs(rdd).contains(Nil)) {
+        if (getCacheLocs(rdd).contains(Nil)) {//如果RDD不存在Cache
           for (dep <- rdd.dependencies) {
             dep match {
               case shufDep: ShuffleDependency[_, _, _] =>
@@ -715,6 +718,9 @@ class DAGScheduler(
     submitWaitingStages()
   }
 
+  /**
+   * DAGScheduler的主要方法，用来处理提交Job
+   */
   private[scheduler] def handleJobSubmitted(jobId: Int,
       finalRDD: RDD[_],
       func: (TaskContext, Iterator[_]) => _,
@@ -728,6 +734,8 @@ class DAGScheduler(
     try {
       // New stage creation may throw an exception if, for example, jobs are run on a
       // HadoopRDD whose underlying HDFS files have been deleted.
+      //最后一个RDD的Stage，也包含了所有父Stage的信用
+      //生成newStage的时候会把所有依赖的父Stage计算出来，放入到parentStage中
       finalStage = newStage(finalRDD, partitions.size, None, jobId, callSite)
     } catch {
       case e: Exception =>
@@ -736,6 +744,7 @@ class DAGScheduler(
         return
     }
     if (finalStage != null) {
+      //新生成一个ActiveJob对象，包含了finalStage
       val job = new ActiveJob(jobId, finalStage, func, partitions, callSite, listener, properties)
       clearCacheLocs()
       logInfo("Got job %s (%s) with %d output partitions (allowLocal=%s)".format(
@@ -766,12 +775,12 @@ class DAGScheduler(
   }
 
   /** Submits stage, but first recursively submits any missing parents. */
-  private def submitStage(stage: Stage) {
+  private def submitStage(stage: Stage) {//提交当前Stage，会递归的将父Stage提交
     val jobId = activeJobForStage(stage)
     if (jobId.isDefined) {
       logDebug("submitStage(" + stage + ")")
       if (!waitingStages(stage) && !runningStages(stage) && !failedStages(stage)) {
-        val missing = getMissingParentStages(stage).sortBy(_.id)
+        val missing = getMissingParentStages(stage).sortBy(_.id)//找到所有未运行的父Stage
         logDebug("missing: " + missing)
         if (missing == Nil) {
           logInfo("Submitting " + stage + " (" + stage.rdd + "), which has no missing parents")
