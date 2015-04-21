@@ -68,7 +68,11 @@ private[spark] class ShuffleMapTask(
       writer = manager.getWriter[Any, Any](dep.shuffleHandle, partitionId, context)
       //这里执行Task的时候，会调用RDD.iterator，在write方法内，会调用iterator.next方法
       //调用itertor进行迭代计算的时候，也会持有context方法
+      //start time
+      //在Executor的类中，启动一个TaskRunner，然后启动run方法，run方法中主要执行了runTask方法
+      //runTask方法中，包含一个反序列化过程，反序列化出来rdd和dep依赖
       writer.write(rdd.iterator(partition, context).asInstanceOf[Iterator[_ <: Product2[Any, Any]]])
+      //finish time
       return writer.stop(success = true).get
     } catch {
       case e: Exception =>

@@ -460,8 +460,8 @@ private[ui] class StagePage(parent: StagesTab) extends WebUIPage("stage") {
         else metrics.map(m => UIUtils.formatDuration(m.executorRunTime)).getOrElse("")
       val schedulerDelay = metrics.map(getSchedulerDelay(info, _)).getOrElse(0L)
       val gcTime = metrics.map(_.jvmGCTime).getOrElse(0L)
-      val taskDeserializationTime = metrics.map(_.executorDeserializeTime).getOrElse(0L)
-      val serializationTime = metrics.map(_.resultSerializationTime).getOrElse(0L)
+      val taskDeserializationTime = metrics.map(_.executorDeserializeTime).getOrElse(0L)//反序列化时间
+      val serializationTime = metrics.map(_.resultSerializationTime).getOrElse(0L)//结果的序列化时间
       val gettingResultTime = info.gettingResultTime
 
       val maybeAccumulators = info.accumulables

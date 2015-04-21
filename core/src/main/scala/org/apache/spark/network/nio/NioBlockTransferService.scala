@@ -79,6 +79,7 @@ final class NioBlockTransferService(conf: SparkConf, securityManager: SecurityMa
     }
   }
 
+  //fecthBlockSync会调用这个方法
   override def fetchBlocks(
       host: String,
       port: Int,

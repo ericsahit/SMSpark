@@ -263,6 +263,7 @@ object SparkEnv extends Logging {
     val closureSerializer = instantiateClassFromConf[Serializer](
       "spark.closure.serializer", "org.apache.spark.serializer.JavaSerializer")
 
+    //注册或者查找一个Actor，如果是Driver，则需要注册成一个Actor
     def registerOrLookup(name: String, newActor: => Actor): ActorRef = {
       if (isDriver) {
         logInfo("Registering " + name)
@@ -303,7 +304,9 @@ object SparkEnv extends Logging {
       }
 
     //新建BlockManagerMaster，是一个DriverActorRef的包装
+    //而
     //第一个参数是driverActor: ActorRef,
+    //这里会根据是否是driver，来创建BlockManagerMasterActor或者去Driver端寻找一个BlockManagerMasterActor的引用
     val blockManagerMaster = new BlockManagerMaster(registerOrLookup(
       "BlockManagerMaster",
       new BlockManagerMasterActor(isLocal, conf, listenerBus)), conf, isDriver)

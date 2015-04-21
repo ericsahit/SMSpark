@@ -116,6 +116,7 @@ private[spark] class Master(
   // among all the nodes) instead of trying to consolidate each app onto a small # of nodes.
   val spreadOutApps = conf.getBoolean("spark.deploy.spreadOut", true)
 
+  //默认的defaultCores是最大，默认的maxCores也是最大，就是会直接占满内存
   // Default maxCores for applications that don't specify it (i.e. pass Int.MaxValue)
   val defaultCores = conf.getInt("spark.deploy.defaultCores", Int.MaxValue)
   if (defaultCores < 1) {
@@ -310,7 +311,7 @@ private[spark] class Master(
           sender ! DriverStatusResponse(found = false, None, None, None, None)
       }
     }
-
+    //AppClient通过提交App，来给Master发送信息
     case RegisterApplication(description) => {
       if (state == RecoveryState.STANDBY) {
         // ignore, don't send response
@@ -554,6 +555,7 @@ private[spark] class Master(
 
     // Right now this is a very simple FIFO scheduler. We keep trying to fit in the first app
     // in the queue, then the second app, etc.
+    //这里开始调度Executor
     if (spreadOutApps) {
       // Try to spread out each app among all the nodes, until it has all its cores
       for (app <- waitingApps if app.coresLeft > 0) {

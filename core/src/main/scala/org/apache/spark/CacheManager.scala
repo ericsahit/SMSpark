@@ -39,8 +39,9 @@ private[spark] class CacheManager(blockManager: BlockManager) extends Logging {
   //	如果不存在，则先计算，然后再缓存。
   //	如果是缓存到内存中，则需要先展开数据，得到数据真实的长度，方便根据内存空间大小进行存储。
   //因为RDD的计算都是惰性的，当进行迭代时，才会执行的层层包装next方法，对每一条记录进行pipeline式的处理。
+  //理解RDD的本质其实是构建了一条数据流通道，然后再需要获取结果的时候，从源头开始一条一条构建，中间的窄依赖的RDD都是数据流通道上的一个操作。
   //
-  //这里也传入了Task
+  //这里也传入了TaskContext，因为是在执行Task任务内进行存取和判断的
   //
   /** Gets or computes an RDD partition. Used by RDD.iterator() when an RDD is cached. */
   def getOrCompute[T](
@@ -52,7 +53,9 @@ private[spark] class CacheManager(blockManager: BlockManager) extends Logging {
     val key = RDDBlockId(rdd.id, partition.index)
     logDebug(s"Looking for partition $key")
     blockManager.get(key) match {//这里会在本次或者远程来查找，远程查找需要跟BlockManagerMaster通信确定数据位置
-      case Some(blockResult) =>//****为什么会出现Network远程拉去数据，是否没有利用到Block的本地性？
+      //****为什么会出现Network远程拉去数据，是否没有利用到Block的本地性？
+      //answer：在任务调度过程中会利用到Block的本地性，但是任务调度策略还需要仔细研究，为什么会出现那么多的远程拉取数据
+      case Some(blockResult) =>
         // Partition is already materialized, so just return its values
         val inputMetrics = blockResult.inputMetrics
         val existingMetrics = context.taskMetrics
@@ -84,7 +87,7 @@ private[spark] class CacheManager(blockManager: BlockManager) extends Logging {
             return computedValues
           }
 
-          //放入内存会引起其余一些Block状态变化，例如从内存中替换一些Block
+          //放入内存会引起其余一些Block状态变化，例如从内存中替换一些Block，所以要返回updatedBlocks
           // Otherwise, cache the values and keep track of any updates in block statuses
           val updatedBlocks = new ArrayBuffer[(BlockId, BlockStatus)]
           val cachedValues = putInBlockManager(key, computedValues, storageLevel, updatedBlocks)
@@ -180,6 +183,7 @@ private[spark] class CacheManager(blockManager: BlockManager) extends Logging {
        * single partition. Instead, we unroll the values cautiously, potentially aborting and
        * dropping the partition to disk if applicable.
        */
+      //
       //展开数据，而且需要逐渐的展开，防止内存爆掉，展开的过程中会进行block的置换（简单的循环block数组），并没有一定的策略
       //参见相关的Jira和PR
       blockManager.memoryStore.unrollSafely(key, values, updatedBlocks) match {

@@ -171,15 +171,23 @@ private[spark] class Executor(
     }
 
     override def run() {
-      val deserializeStartTime = System.currentTimeMillis()
+      val deserializeStartTime = System.currentTimeMillis()//数据反序列化开始时间
       Thread.currentThread.setContextClassLoader(replClassLoader)
       val ser = env.closureSerializer.newInstance()
+      //1.这里开始任务执行
       logInfo(s"Running $taskName (TID $taskId)")
       execBackend.statusUpdate(taskId, TaskState.RUNNING, EMPTY_BYTE_BUFFER)
       var taskStart: Long = 0
       startGCTime = gcTime
 
       try {
+        /**
+         * 2.这里会下载一些依赖。会花费两秒左右。
+         * 例如：
+         * Executor: Fetching http://192.168.4.10:46609/jars/spark-examples-1.1.0-hadoop2.3.0.jar with timestamp 1429522979524
+         * Utils: Fetching http://192.168.4.10:46609/jars/spark-examples-1.1.0-hadoop2.3.0.jar to /tmp/fetchFileTemp8707150260669840082.tmp
+         * Executor: Adding file:/data/hadoopspark/spark-1.0.2-bin-hadoop2/work/app-20150420094259-0001/2/./spark-examples-1.1.0-hadoop2.3.0.jar to class loader
+         */
         val (taskFiles, taskJars, taskBytes) = Task.deserializeWithDependencies(serializedTask)
         updateDependencies(taskFiles, taskJars)
         task = ser.deserialize[Task[Any]](taskBytes, Thread.currentThread.getContextClassLoader)
@@ -199,7 +207,8 @@ private[spark] class Executor(
         env.mapOutputTracker.updateEpoch(task.epoch)
 
         // Run the actual task and measure its runtime.
-        taskStart = System.currentTimeMillis()
+        taskStart = System.currentTimeMillis()//taskStart - deserializeStartTime作为序列化时间
+        logInfo("")
         //运行任务，实际执行的是runTask(context)，会根据任务类型的不同实现具体的runTask方法
         val value = task.run(taskAttemptId = taskId, attemptNumber = attemptNumber)
         val taskFinish = System.currentTimeMillis()
@@ -211,19 +220,19 @@ private[spark] class Executor(
 
         val resultSer = env.serializer.newInstance()
         val beforeSerialization = System.currentTimeMillis()
-        val valueBytes = resultSer.serialize(value)
+        val valueBytes = resultSer.serialize(value)//序列化输出结果
         val afterSerialization = System.currentTimeMillis()
 
         for (m <- task.metrics) {
-          m.setExecutorDeserializeTime(taskStart - deserializeStartTime)
+          m.setExecutorDeserializeTime(taskStart - deserializeStartTime)//反序列化时间
           m.setExecutorRunTime(taskFinish - taskStart)
           m.setJvmGCTime(gcTime - startGCTime)
-          m.setResultSerializationTime(afterSerialization - beforeSerialization)
+          m.setResultSerializationTime(afterSerialization - beforeSerialization)//结果的序列化时间
         }
 
         val accumUpdates = Accumulators.values
 
-        val directResult = new DirectTaskResult(valueBytes, accumUpdates, task.metrics.orNull)
+        val directResult = new DirectTaskResult(valueBytes, accumUpdates, task.metrics.orNull)//将结果，metrics等信息传回Driver
         val serializedDirectResult = ser.serialize(directResult)
         val resultSize = serializedDirectResult.limit
 

@@ -196,6 +196,8 @@ private[spark] class BlockManager(
     blockTransferService.init(this)
     shuffleClient.init(appId)
 
+    //****BlockManagerId在这里初始化，使用的host和port都是blockTransferService的属性
+    //为什么要注册BlockManager，因为需要有一个全局的Block管理
     blockManagerId = BlockManagerId(
       executorId, blockTransferService.hostName, blockTransferService.port)
 

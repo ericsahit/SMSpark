@@ -116,7 +116,7 @@ private[spark] class TorrentBroadcast[T: ClassTag](obj: T, id: Long)
     val blocks = new Array[ByteBuffer](numBlocks)
     val bm = SparkEnv.get.blockManager
 
-    for (pid <- Random.shuffle(Seq.range(0, numBlocks))) {
+    for (pid <- Random.shuffle(Seq.range(0, numBlocks))) {//****这里会远程下载一些$broadcastId
       val pieceId = BroadcastBlockId(id, "piece" + pid)
       logDebug(s"Reading piece $pieceId of $broadcastId")
       // First try getLocalBytes because there is a chance that previous attempts to fetch the
@@ -126,7 +126,7 @@ private[spark] class TorrentBroadcast[T: ClassTag](obj: T, id: Long)
       def getRemote: Option[ByteBuffer] = bm.getRemoteBytes(pieceId).map { block =>
         // If we found the block from remote executors/driver's BlockManager, put the block
         // in this executor's BlockManager.
-        SparkEnv.get.blockManager.putBytes(
+        SparkEnv.get.blockManager.putBytes(//****然后put到blockManager中，级别是MEMORY_AND_DISK_SER
           pieceId,
           block,
           StorageLevel.MEMORY_AND_DISK_SER,

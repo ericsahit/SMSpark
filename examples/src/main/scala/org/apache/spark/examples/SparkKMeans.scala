@@ -79,7 +79,7 @@ object SparkKMeans {
     while(tempDist > convergeDist) {//开始迭代
       //对每个点数据，计算所属的分类是哪个，返回(中心点，(数据点, 1))
       val closest = data.map (p => (closestPoint(p, kPoints), (p, 1)))
-      //每个聚类的key累加，方便计算新的中心点
+      //每个聚类的key累加，方便计算新的中心点，这是一个分布式的计算作业
       val pointStats = closest.reduceByKey{case ((x1, y1), (x2, y2)) => (x1 + x2, y1 + y2)}
       //计算新的中心点
       val newPoints = pointStats.map {pair =>

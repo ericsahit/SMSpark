@@ -214,6 +214,15 @@ class HadoopRDD[K, V](
       val split = theSplit.asInstanceOf[HadoopPartition]
       logInfo("Input split: " + split.inputSplit)
       val jobConf = getJobConf()
+      
+      val hsplit = split.asInstanceOf[HadoopPartition].inputSplit.value
+      
+      val isLocal = hsplit.getLocations().contains("localhost")
+      if (isLocal) {
+        
+      } else {
+        
+      }
 
       val inputMetrics = context.taskMetrics
         .getInputMetricsForReadMethod(DataReadMethod.Hadoop)//这里设置了input为Hadoop，就是说input为Hadoop时候还需要从HDFS文件系统中读数据
@@ -234,7 +243,8 @@ class HadoopRDD[K, V](
       HadoopRDD.addLocalConfiguration(new SimpleDateFormat("yyyyMMddHHmm").format(createTime),
         context.stageId, theSplit.index, context.attemptNumber, jobConf)
       reader = inputFormat.getRecordReader(split.inputSplit.value, jobConf, Reporter.NULL)
-
+      
+      
       // Register an on-task-completion callback to close the input stream.
       context.addTaskCompletionListener{ context => closeIfNeeded() }
       val key: K = reader.createKey()

@@ -78,7 +78,7 @@ private[spark] class Stage(
   var latestInfo: StageInfo = StageInfo.fromStage(this)
 
   def isAvailable: Boolean = {
-    if (!isShuffleMap) {
+    if (!isShuffleMap) {//如果不是ShuffleMap
       true
     } else {
       numAvailableOutputs == numPartitions

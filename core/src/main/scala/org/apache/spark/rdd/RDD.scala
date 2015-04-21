@@ -82,7 +82,7 @@ abstract class RDD[T: ClassTag](
     logWarning("Spark does not support nested RDDs (see SPARK-5063)")
   }
 
-  private def sc: SparkContext = {
+  private def sc: SparkContext = {//sc在Task中是空的
     if (_sc == null) {
       throw new SparkException(
         "RDD transformations and actions can only be invoked by the driver, not inside of other " +
@@ -238,7 +238,7 @@ abstract class RDD[T: ClassTag](
    * subclasses of RDD.
    */
   final def iterator(split: Partition, context: TaskContext): Iterator[T] = {
-    if (storageLevel != StorageLevel.NONE) {
+    if (storageLevel != StorageLevel.NONE) {//如果RDD需要被缓存，则先放到内存中（过程中需要计算），然后再返回RDD的iterator[T]
       SparkEnv.get.cacheManager.getOrCompute(this, split, context, storageLevel)
     } else {
       computeOrReadCheckpoint(split, context)

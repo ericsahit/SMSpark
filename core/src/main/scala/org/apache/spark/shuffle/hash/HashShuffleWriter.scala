@@ -61,9 +61,11 @@ private[spark] class HashShuffleWriter[K, V](
       records
     }
 
-    for (elem <- iter) {
+    for (elem <- iter) {//迭代每一条记录，过程中会读取数据和计算
+      //write begin time
       val bucketId = dep.partitioner.getPartition(elem._1)
       shuffle.writers(bucketId).write(elem)
+      //write end time
     }
   }
 

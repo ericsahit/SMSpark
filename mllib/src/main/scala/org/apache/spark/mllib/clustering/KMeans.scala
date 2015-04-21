@@ -286,7 +286,7 @@ class KMeans private (
     // Initialize each run's first center to a random point.
     val seed = new XORShiftRandom(this.seed).nextInt()
     val sample = data.takeSample(true, runs, seed).toSeq
-    val newCenters = Array.tabulate(runs)(r => ArrayBuffer(sample(r).toDense))
+    val newCenters = Array.tabulate(runs)(r => ArrayBuffer(sample(r).toDense)) //随机生成runs个中心点
 
     /** Merges new centers to centers. */
     def mergeNewCenters(): Unit = {
@@ -333,7 +333,7 @@ class KMeans private (
           }
           if (rs.length > 0) Some(p, rs) else None
         }
-      }.collect()
+      }.collect()//step 2
       mergeNewCenters()
       chosen.foreach { case (p, rs) =>
         rs.foreach(newCenters(_) += p.toDense)

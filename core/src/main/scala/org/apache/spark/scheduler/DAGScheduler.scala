@@ -84,6 +84,7 @@ class DAGScheduler(
 
   private[scheduler] val jobIdToStageIds = new HashMap[Int, HashSet[Int]]
   private[scheduler] val stageIdToStage = new HashMap[Int, Stage]
+  //stage编号，ShuffleMapStage
   private[scheduler] val shuffleToMapStage = new HashMap[Int, Stage]
   private[scheduler] val jobIdToActiveJob = new HashMap[Int, ActiveJob]
 
@@ -193,7 +194,7 @@ class DAGScheduler(
     // Note: this doesn't use `getOrElse()` because this method is called O(num tasks) times
     if (!cacheLocs.contains(rdd.id)) {
       val blockIds = rdd.partitions.indices.map(index => RDDBlockId(rdd.id, index)).toArray[BlockId]
-      val locs = BlockManager.blockIdsToBlockManagers(blockIds, env, blockManagerMaster)//得到Cached RDD的Block位置
+      val locs = BlockManager.blockIdsToBlockManagers(blockIds, env, blockManagerMaster)//得到当前Cached RDD的Block位置
       cacheLocs(rdd.id) = blockIds.map { id =>
         locs.getOrElse(id, Nil).map(bm => TaskLocation(bm.host, bm.executorId))
       }
@@ -287,8 +288,8 @@ class DAGScheduler(
    * 这个方法根据RDD的Dependency类型，来分割为不同的Stage
    * 使用一个stack来递归遍历
    */
-  private def getParentStages(rdd: RDD[_], jobId: Int): List[Stage] = {
     val parents = new HashSet[Stage]
+    		private def getParentStages(rdd: RDD[_], jobId: Int): List[Stage] = {
     val visited = new HashSet[RDD[_]]
     // We are manually maintaining a stack here to prevent StackOverflowError
     // caused by recursively visiting
@@ -360,6 +361,7 @@ class DAGScheduler(
     parents
   }
 
+  //getParentStages方法内容差不多
   private def getMissingParentStages(stage: Stage): List[Stage] = {
     val missing = new HashSet[Stage]
     val visited = new HashSet[RDD[_]]
@@ -369,12 +371,13 @@ class DAGScheduler(
     def visit(rdd: RDD[_]) {
       if (!visited(rdd)) {
         visited += rdd
-        if (getCacheLocs(rdd).contains(Nil)) {//如果RDD不存在Cache
+        //如果RDD不存在一个Cached Block（其中调用了BlockManager.blockIdsToBlockManagers(blockIds, env, blockManagerMaster)）
+        if (getCacheLocs(rdd).contains(Nil)) {
           for (dep <- rdd.dependencies) {
             dep match {
               case shufDep: ShuffleDependency[_, _, _] =>
                 val mapStage = getShuffleMapStage(shufDep, stage.jobId)
-                if (!mapStage.isAvailable) {
+                if (!mapStage.isAvailable) {//如果
                   missing += mapStage
                 }
               case narrowDep: NarrowDependency[_] =>
@@ -734,7 +737,7 @@ class DAGScheduler(
     try {
       // New stage creation may throw an exception if, for example, jobs are run on a
       // HadoopRDD whose underlying HDFS files have been deleted.
-      //最后一个RDD的Stage，也包含了所有父Stage的信用
+      //最后一个RDD的Stage，也包含了所有父Stage的引用
       //生成newStage的时候会把所有依赖的父Stage计算出来，放入到parentStage中
       finalStage = newStage(finalRDD, partitions.size, None, jobId, callSite)
     } catch {
@@ -760,7 +763,7 @@ class DAGScheduler(
         listenerBus.post(
           SparkListenerJobStart(job.jobId, jobSubmissionTime, Seq.empty, properties))
         runLocally(job)
-      } else {
+      } else {//不是本地模式运行
         jobIdToActiveJob(jobId) = job
         activeJobs += job
         finalStage.resultOfJob = Some(job)

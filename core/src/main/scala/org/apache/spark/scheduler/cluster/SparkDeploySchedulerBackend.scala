@@ -45,6 +45,7 @@ private[spark] class SparkDeploySchedulerBackend(
   override def start() {
     super.start()
 
+    //在这里来取所有的参数进行解析，spark.cores.max在这里被解析
     // The endpoint for executors to talk to us
     val driverUrl = AkkaUtils.address(
       AkkaUtils.protocol(actorSystem),

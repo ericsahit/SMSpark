@@ -90,6 +90,7 @@ private[spark] class ApplicationInfo(
     }
   }
 
+  //先使用maxCores，否则使用defaultCores
   private val myMaxCores = desc.maxCores.getOrElse(defaultCores)
 
   def coresLeft: Int = myMaxCores - coresGranted
