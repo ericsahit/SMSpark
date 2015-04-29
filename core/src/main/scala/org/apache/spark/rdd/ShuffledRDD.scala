@@ -87,6 +87,10 @@ class ShuffledRDD[K, V, C](
   }
 
   override def compute(split: Partition, context: TaskContext): Iterator[(K, C)] = {
+    //shuffledRDD的compute方法就是从shuffleReader中进行本地或者远程的数据拉取操作，构造一个itertor
+    //在下游的RDD要使用数据时候才会进行真正的拉取操作
+    //就是说计算和数据的拉取，是一个流水线pipeline的操作
+    //保证的itertor在ShuffleBlockFetcherIterator中
     val dep = dependencies.head.asInstanceOf[ShuffleDependency[K, V, C]]
     SparkEnv.get.shuffleManager.getReader(dep.shuffleHandle, split.index, split.index + 1, context)
       .read()

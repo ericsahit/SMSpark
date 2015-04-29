@@ -75,7 +75,7 @@ private[spark] class DiskStore(blockManager: BlockManager, diskManager: DiskBloc
     val file = diskManager.getFile(blockId)
     val outputStream = new FileOutputStream(file)
     try {
-      try {
+      try {//序列化到输出流中
         blockManager.dataSerializeStream(blockId, outputStream, values)
       } finally {
         // Close outputStream here because it should be closed before file is deleted.

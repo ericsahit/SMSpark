@@ -43,6 +43,11 @@ private[spark] class CacheManager(blockManager: BlockManager) extends Logging {
   //
   //这里也传入了TaskContext，因为是在执行Task任务内进行存取和判断的
   //
+  //1.如果RDD不存在，则先得到此RDD的迭代器computedValues
+  //2.调用putInBlockManager方法，将RDD放入到缓存中
+  //	1.如果不放入内存，则调用blockManager.putIterator
+  //	2.如果放入内存则先unrollSafely展开计算，调用blockManager.putArray进行存储，返回展开后的array
+  //
   /** Gets or computes an RDD partition. Used by RDD.iterator() when an RDD is cached. */
   def getOrCompute[T](
       rdd: RDD[T],
@@ -78,7 +83,7 @@ private[spark] class CacheManager(blockManager: BlockManager) extends Logging {
         }
 
         // Otherwise, we have to load the partition ourselves
-        try {//如果没有被缓存，则先进行计算，再尝试缓存到内存中
+        try {//如果没有被缓存，则先得到迭代器（不一定直接计算），再尝试缓存到内存中
           logInfo(s"Partition $key not found, computing it")
           val computedValues = rdd.computeOrReadCheckpoint(partition, context)
 
@@ -186,12 +191,13 @@ private[spark] class CacheManager(blockManager: BlockManager) extends Logging {
       //
       //展开数据，而且需要逐渐的展开，防止内存爆掉，展开的过程中会进行block的置换（简单的循环block数组），并没有一定的策略
       //参见相关的Jira和PR
+      //TODO：使用共享存储时候这里需要修改
       blockManager.memoryStore.unrollSafely(key, values, updatedBlocks) match {
         case Left(arr) =>//可以展开，有足够空间，则存储到内存中
           // We have successfully unrolled the entire partition, so cache it in memory
           updatedBlocks ++=
             blockManager.putArray(key, arr, level, tellMaster = true, effectiveStorageLevel)
-          arr.iterator.asInstanceOf[Iterator[T]]
+          arr.iterator.asInstanceOf[Iterator[T]]//直接返回的展开结果，以供本次使用
         case Right(it) =>//空间不足，看看是否能写入到磁盘
           // There is not enough space to cache this partition in memory
           val returnValues = it.asInstanceOf[Iterator[T]]

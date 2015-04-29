@@ -308,6 +308,8 @@ private[spark] class BlockManager(
    * cannot be read successfully.
    * 得到非asBlockResult的bytes数据的Block
    * 一般在远程获取Block数据时候使用。例如：BlockTransferService，NettyBlockRpcServer
+   * 
+   * 如果是shuffle读取，则调用shuffleBlockManager.getBlockData
    */
   override def getBlockData(blockId: BlockId): ManagedBuffer = {
     if (blockId.isShuffle) {
@@ -468,7 +470,7 @@ private[spark] class BlockManager(
 
   private def doGetLocal(blockId: BlockId, asBlockResult: Boolean): Option[Any] = {
     val info = blockInfo.get(blockId).orNull //本地的BlockId到BlockInfo的映射
-    if (info != null) {
+    if (info != null) {//TODO: ****共享存储这里需要修改下，本地没有的话到共享存储空间里寻找，或者修改doGetRemote
       info.synchronized {
         // Double check to make sure the block is still there. There is a small chance that the
         // block has been removed by removeBlock (which also synchronizes on the blockInfo object).
@@ -491,7 +493,7 @@ private[spark] class BlockManager(
         logDebug(s"Level for block $blockId is $level")
 
         // Look for the block in memory
-        if (level.useMemory) {
+        if (level.useMemory) {//返回的可能是Array[T]，也可能是ByteBuffer
           logDebug(s"Getting block $blockId from memory")
           val result = if (asBlockResult) {
             memoryStore.getValues(blockId).map(new BlockResult(_, DataReadMethod.Memory, info.size))
@@ -817,7 +819,7 @@ private[spark] class BlockManager(
         val result = data match {
           case IteratorValues(iterator) =>
             blockStore.putIterator(blockId, iterator, putLevel, returnValues)
-          case ArrayValues(array) =>
+          case ArrayValues(array) =>//对于RDD的存储，因为CacheManager中做过展开操作，所以类型是Array
             blockStore.putArray(blockId, array, putLevel, returnValues)
           case ByteBufferValues(bytes) =>
             bytes.rewind()
@@ -841,7 +843,7 @@ private[spark] class BlockManager(
           // let other threads read it, and tell the master about it.
           marked = true
           putBlockInfo.markReady(size)
-          if (tellMaster) {
+          if (tellMaster) {//存储RDD的Block时候，需要告诉master节点，本Block已被缓存
             reportBlockStatus(blockId, putBlockInfo, putBlockStatus)
           }
           updatedBlocks += ((blockId, putBlockStatus))
@@ -885,6 +887,7 @@ private[spark] class BlockManager(
       }
     }
 
+    //返回的这个数组，如果是MappedByteBuffer，则被清除掉
     BlockManager.dispose(bytesAfterPut)
 
     if (putLevel.replication > 1) {
@@ -1033,6 +1036,13 @@ private[spark] class BlockManager(
    * store reaches its limit and needs to free up space.
    *
    * Return the block status if the given block has been updated, else None.
+   * 
+   * 将一个Block从内存中去除，如果存储级别包含磁盘的话会写到磁盘上。
+   * 这里会使用BlockInfo的锁，来防止多个线程同时对一个Block进行操作
+   * 使用场合：
+   * 1.在写Block时候tryToPut到内存中时，如果空间不足，则调用dropFromMemory。
+   * 2.
+   * 
    */
   def dropFromMemory(
       blockId: BlockId,
@@ -1080,7 +1090,7 @@ private[spark] class BlockManager(
         }
 
         val status = getCurrentBlockStatus(blockId, info)
-        if (info.tellMaster) {
+        if (info.tellMaster) {//DropMemory
           reportBlockStatus(blockId, info, status, droppedMemorySize)
         }
         if (!level.useDisk) {
@@ -1203,6 +1213,7 @@ private[spark] class BlockManager(
   }
 
   /** Serializes into a stream. */
+  //****序列化的话这里会做展开操作，调用iterator.next方法，但是没有做unrollSafely
   def dataSerializeStream(
       blockId: BlockId,
       outputStream: OutputStream,

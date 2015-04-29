@@ -37,6 +37,8 @@ private[spark] class HashShuffleReader[K, C](
   /** Read the combined key-values for this reduce task */
   override def read(): Iterator[Product2[K, C]] = {
     val ser = Serializer.getSerializer(dep.serializer)
+    //这里构造了Block的输入流，包含本地和远程的Block读取
+    //在Block时候时候数据才从磁盘或者远程，来进行拉取，还是itertor的思想
     val iter = BlockStoreShuffleFetcher.fetch(handle.shuffleId, startPartition, context, ser)
 
     val aggregatedIter: Iterator[Product2[K, C]] = if (dep.aggregator.isDefined) {

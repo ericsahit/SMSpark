@@ -82,7 +82,7 @@ abstract class RDD[T: ClassTag](
     logWarning("Spark does not support nested RDDs (see SPARK-5063)")
   }
 
-  private def sc: SparkContext = {//sc在Task中是空的
+  private def sc: SparkContext = {//sc在Task端中是空的
     if (_sc == null) {
       throw new SparkException(
         "RDD transformations and actions can only be invoked by the driver, not inside of other " +

@@ -278,6 +278,7 @@ final class ShuffleBlockFetcherIterator(
     currentResult = results.take()
     val result = currentResult
     val stopFetchWait = System.currentTimeMillis()
+    //这里会有一个时间的计数器
     shuffleMetrics.incFetchWaitTime(stopFetchWait - startFetchWait)
 
     result match {

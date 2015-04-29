@@ -91,7 +91,14 @@ private[spark] class MemoryStore(blockManager: BlockManager, maxMemory: Long)
     }
   }
 
-  //存放对象数组，没有序列化
+  //存放对象数组，分为序列化和非序列化
+  /**
+   * 存储RDD block使用的主要方法应该是putArray方法。
+   * 
+   * 下列场合使用：
+   * 1.读取的RDD不存在时，进行数据展开，展开时候调用BlockManager.putArray方法，
+   * 按照存储级别，将Array[T]存储到内存中。
+   */
   override def putArray(
       blockId: BlockId,
       values: Array[Any],
@@ -102,12 +109,29 @@ private[spark] class MemoryStore(blockManager: BlockManager, maxMemory: Long)
       val putAttempt = tryToPut(blockId, values, sizeEstimate, deserialized = true)
       PutResult(sizeEstimate, Left(values.iterator), putAttempt.droppedBlocks)
     } else {
-      val bytes = blockManager.dataSerialize(blockId, values.iterator)
+      val bytes = blockManager.dataSerialize(blockId, values.iterator)//这里会进行序列化，已经进行了unrollSafely操作
       val putAttempt = tryToPut(blockId, bytes, bytes.limit, deserialized = false)
       PutResult(bytes.limit(), Right(bytes.duplicate()), putAttempt.droppedBlocks)
     }
   }
 
+  /**
+   * 存储RDD block使用的主要方法应该是putArray方法。
+   * 在从磁盘上读入，又返回存储到内存时候，调用putIterator方法，putIterator方法调用unrollSafely方法后，生成Array[T]
+   * 然后又会调用putArray方法。
+   * 
+   * 下列场合使用：
+   * 1.读取RDD时候，从磁盘中读取出来，此时如果存储级别中包含了Memory，则使用此方法，将磁盘获得的MappedByteBuffer写入到内存中
+   * 
+   * 此方法用来就是说存储一个Iterator对象，主要包含下列步骤：
+   * 1.unrollSafely
+   * 2.如果unrollSafely成功，则会变成一个Array[T]
+   * 3.调用putArray方法，其中调用tryToPut方法
+   * 4.tryToPut方法中，会调用ensureFreeSpace释放已有的空间，将其他的Block进行替换（排除本RDD所属的Block）
+   * 	如果释放足够的空间，会将RDD放入的MemoryEntry中，返回value数组（展开后）
+   *    如果释放的空间不足，会调用blockManager.dropFromMemory方法，其中会对memoryStore做一次remove操作（可能重复）
+   *   
+   */
   override def putIterator(
       blockId: BlockId,
       values: Iterator[Any],
@@ -170,6 +194,9 @@ private[spark] class MemoryStore(blockManager: BlockManager, maxMemory: Long)
     }
   }
 
+   /**
+    * 读取RDD block主要使用此方法，根据是否反序列化返回Array数组，或者包装ByteArray的反序列化数组
+    */
   override def getValues(blockId: BlockId): Option[Iterator[Any]] = {
     val entry = entries.synchronized {
       entries.get(blockId)
@@ -184,6 +211,12 @@ private[spark] class MemoryStore(blockManager: BlockManager, maxMemory: Long)
     }
   }
 
+  /**
+   * 下列场合使用：
+   * 1.BlockManager.dropOldBlocks
+   * 2.BlockManager.dropFromMemory
+   * 3.BlockManager.removeBlock
+   */
   override def remove(blockId: BlockId): Boolean = {
     entries.synchronized {
       val entry = entries.remove(blockId)
