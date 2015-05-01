@@ -12,6 +12,14 @@ public abstract class BlockInputStream extends InputStream {
   
   protected boolean closed = false;
   
+  public static InputStream getInputStream(Boolean local, String type, String entry) {
+    if (local) {
+      return LocalBlockInputStream.getLocalInputStream(type, entry);
+    } else {
+      return null;
+    }
+  }
+  
   @Override
   public abstract void close() throws IOException;
 
