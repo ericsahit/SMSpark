@@ -57,21 +57,15 @@ class BlockServerClient(val clientId: BlockServerClientId, var blockServerWorker
   
   def getBlockSize(blockId: SBlockId): Long = {
     //先查找block的本地列表. 
-    //TODO：需要访问worker节点增加数据读取计数吗？在共存存储空间那增加技术貌似更好
-    val entry = blocksCache.get(blockId)
-    if (entry != null) {
-      entry.size
-    } else {
-      0L
-    }
+    //TODO：需要访问worker节点增加数据读取计数吗？在共存存储空间那增加计数貌似更好
+    0L
   }
   
   /**
    * 查看Block是否存在
    */
   def contains(blockId: SBlockId): Boolean = {
-    fetchBlockIfNotExist(blockId)
-    blocksCache.contains(blockId)
+    askBlockServerWithReply[Option[SBlockEntry]](GetBlock(blockId)).isDefined
   }
   
   /**
@@ -86,15 +80,15 @@ class BlockServerClient(val clientId: BlockServerClientId, var blockServerWorker
    * 增加一个Block，先得到共享存储的入口信息，然后开始进行写入
    * 参数：
    */
-  def reqNewBlock(name: String, size: Long): Option[SBlockEntry] = {
-    askBlockServerWithReply[Option[SBlockEntry]](RequestNewBlock(clientId, name, size))
+  def reqNewBlock(userDefinedId: String, size: Long): Option[SBlockEntry] = {
+    askBlockServerWithReply[Option[SBlockEntry]](RequestNewBlock(clientId, userDefinedId, size))
   }
   
   /**
    * 写共享存储空间完成后
    */
-  def writeBlockResult(entryStr: String, success: Boolean): Option[SBlockId] = {
-    askBlockServerWithReply[Option[SBlockId]](WriteBlockResult(clientId, entryStr, success))
+  def writeBlockResult(entryId: Int, success: Boolean): Option[SBlockId] = {
+    askBlockServerWithReply[Option[SBlockId]](WriteBlockResult(clientId, entryId, success))
   }
   
 

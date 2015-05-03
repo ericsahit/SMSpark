@@ -25,6 +25,7 @@ import java.io.OutputStream
 import java.util.HashMap
 import org.apache.spark.smstorage.SBlockEntry
 import org.apache.spark.smstorage.SBlockEntry
+import org.apache.spark.smstorage.client.io.LocalBlockOutputStream
 
 /**
  * @author hwang
@@ -36,8 +37,11 @@ import org.apache.spark.smstorage.SBlockEntry
  * Executor 238：TaskResultBlockId也会存储到BlockManager中
  * env.blockManager.putBytes(blockId, serializedDirectResult, StorageLevel.MEMORY_AND_DISK_SER)
  * 
- * TODO：对于不同类型的Block，是否应该采用不同的存取策略。
- * 现在只针对RDD block，对于Broadcast类型的block，一般大小比较小，仍旧存储到本地内存中，方便使用。
+ * TODO：
+ * 1.对于不同类型的Block，是否应该采用不同的存取策略。
+ * 2.现在只针对RDD block，对于Broadcast类型的block，一般大小比较小，仍旧存储到本地内存中，方便使用。
+ * 3.所以存储Block时候，需要先判断是否是RDD类型的Block。
+ * 4.进行存储的时候，先确定Block不存在
  * 
  * 
  */
@@ -154,13 +158,14 @@ class LocalMemoryStore(
     //TODO: ****这里也需要做一定的抽象，将数据方便的放入到共享存储中，对上层提供一个清晰的API
     //先与worker通信，申请空间等工作，然后再写入
     //TODO: ****name怎么确定
-    val os: OutputStream = null
-    //访问worker节点，请求分配空间，这里应该传入唯一的共享id
+    var os: OutputStream = null
+    //TODO：访问worker节点，请求分配空间，这里应该传入唯一的共享id，userDefinedId（参见SBlockId的解释）
     serverClient.reqNewBlock(blockId.name, byteBuffer.limit()) match {
       case Some(entry) => 
         var success = true
         try {
           //TODO: 写入共享存储的实现机制
+          os = LocalBlockOutputStream.getLocalOutputStream("shmget", entry.entryId, byteBuffer.limit())
           //os = BlockOutputStream("shmget", entry.entryStr)
           os.write(byteBuffer.array())
         } catch {
@@ -174,7 +179,7 @@ class LocalMemoryStore(
         //success=false有两种情况：1.服务器返回空间不足。2.写文件出错。对于第二种情况，需要对worker进行写结果，成功或失败
         //TODO：客户端如果有一个线程任务正在申请，则另一个线程应该等待写完
         
-        serverClient.writeBlockResult(entry.entryStr, success) match {
+        serverClient.writeBlockResult(entry.entryId, success) match {
           case Some(sblockId) =>//成功写入
             entries.put(sblockId, entry)
           case None =>
@@ -214,6 +219,9 @@ class LocalMemoryStore(
     
   }
 
+  /**
+   * TODO：与BlockManager的功能相结合，是否getValues调用之前先调用contains方法？
+   */
   override def getValues(blockId: BlockId): Option[Iterator[Any]] = {
     val sid = SBlockId(blockId)
     val entry = fetchBlockIfNotExist(sid)
@@ -222,18 +230,19 @@ class LocalMemoryStore(
       None
     }
     
-    var is: InputStream = null
+    var is: LocalBlockInputStream = null
     if (entry.local) {
-      is = LocalBlockInputStream.getLocalInputStream("shmget", entry.entryStr)
+      is = LocalBlockInputStream.getLocalInputStream("shmget", entry.entryStr, entry.size.toInt)
     } else {//远程Block
       //is = 
     }
     
     assert (is != null)
     try {
-      
+      val bs = is.readFully(entry.size.toInt)
       //TODO：增加blockManager.dataDeserialize方法对于inputStream的支持
-      return Some(blockManager.dataDeserialize(blockId, is))
+      //目前做法是先全部读取到堆内存，然后再
+      return Some(blockManager.dataDeserialize(blockId, ByteBuffer.wrap(bs)))
     } catch {
       case ioe: IOException =>
         logWarning(s"Failed to fetch the block $blockId from SharedMemoryStore", ioe)
@@ -252,9 +261,9 @@ class LocalMemoryStore(
       None
     }
     
-    var is: InputStream = null
+    var is: LocalBlockInputStream = null
     if (entry.local) {
-      is = LocalBlockInputStream.getLocalInputStream("shmget", entry.entryStr)
+      is = LocalBlockInputStream.getLocalInputStream("shmget", entry.entryStr, entry.size.toInt)
     } else {//远程Block
       //is = 
     }
@@ -262,8 +271,10 @@ class LocalMemoryStore(
     assert (is != null)
     try {
       val size = entry.size
-      val bs = new Array[Byte](size.asInstanceOf[Int])
-      ByteStreams.readFully(is, bs) //TODO有一次内存拷贝，这里是否可以消除？
+      //val bs = new Array[Byte](size.toInt)
+      //这里修改为一次性读出Array，返回
+      val bs = is.readFully(size.toInt)
+      //ByteStreams.readFully(is, bs) //TODO有一次内存拷贝，这里是否可以消除？
       Some(ByteBuffer.wrap(bs))
     } catch {
       case ioe: IOException =>

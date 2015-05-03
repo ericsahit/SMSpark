@@ -13,6 +13,8 @@ import org.apache.spark.util.TimeStampedHashMap
 /**
  * @author hwang
  *
+ * 还需要保存没个client下，Storage的使用情况
+ *
  */
 private[spark] class BlockIndexer {
   
@@ -37,17 +39,17 @@ private[spark] class BlockIndexer {
   }
   
   //TODO：生成一个唯一的BlockId
-  def addBlock(name: String, entry: SBlockEntry) = {
+  //SBlockId使用UserDefinedId作为全局唯一的标识
+  def addBlock(entryId: Int, entry: SBlockEntry) = {
     blockList.synchronized {
       
-      val newBlockId = createNewBlockId()
+      val newBlockId = createNewBlockId(entryId, entry.userDefinedId)
       blockList.put(newBlockId, entry)
       currentMemory += entry.size
       
       newBlockId
     }
   }
-  
   
   def removeBlock(id: SBlockId) = {
     blockList.synchronized {
@@ -64,9 +66,10 @@ private[spark] class BlockIndexer {
   
   /**
    * TODO：新建一个SBlockId
+   * 这里生成的SBlockId，localId为空
    */
-  def createNewBlockId(): SBlockId = {
-    new SBlockId()
+  private def createNewBlockId(entryId: Int, userDefinedId: String): SBlockId = {
+    new SBlockId(userDefinedId, name = entryId.toString)
   }
   
   

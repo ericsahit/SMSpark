@@ -40,9 +40,9 @@ class BlockServerWorkerActor(conf: SparkConf, spaceManager: SpaceManager, blockI
   //保存Block位置，可能有多个Client。保存Block的位置可以表示有多少人在使用它
   private val blockLocation = new mutable.HashMap[SBlockId, mutable.HashSet[BlockServerClientId]]
   
-  //保存被锁定的空间
+  //保存被锁定的空间, entryId->SBlockEntry
   //TODO：需要过期清理
-  private val pendingEntries = new TimeStampedHashMap[String, SBlockEntry]
+  private val pendingEntries = new TimeStampedHashMap[Int, SBlockEntry]
   
   private val pendingClients = new TimeStampedHashMap[String, BlockServerClientId]
   
@@ -73,8 +73,8 @@ class BlockServerWorkerActor(conf: SparkConf, spaceManager: SpaceManager, blockI
     case RequestNewBlock(clientId, name, size) =>
       sender ! reqNewBlock(clientId, name, size)
       
-    case WriteBlockResult(clientId, entryStr, success) =>
-      sender ! writeBlockResult(clientId, entryStr, success)
+    case WriteBlockResult(clientId, entryId, success) =>
+      sender ! writeBlockResult(clientId, entryId, success)
     
     case GetBlock(blockId) =>
       getBlock(blockId)
@@ -118,8 +118,11 @@ class BlockServerWorkerActor(conf: SparkConf, spaceManager: SpaceManager, blockI
   }
   
   /**
+   * 应该保证Block不存在，即先调用contains
    * 新增一个的Block，已经确定不存在block，但是还需要再确定一下
+   * 传入userDefinedId
    * TODO: 如何保证一个线程写Block时候，另一个线程能够并发写？
+   * 
    * 
    * 1)****在客户端应该是先查询，不存在则新增
    * 1)首先是申请相应空间，锁定空间，返回BlockEntry信息
@@ -130,7 +133,7 @@ class BlockServerWorkerActor(conf: SparkConf, spaceManager: SpaceManager, blockI
    * 申请成功：SBLockEntry
    * 申请失败：None
    */
-  private def reqNewBlock(clientId: BlockServerClientId, rddDepId: Long, size: Int): Option[SBlockEntry] = {
+  private def reqNewBlock(clientId: BlockServerClientId, userDefinedId: String, size: Long): Option[SBlockEntry] = {
     
     val client = clientList.get(clientId)
     if (client.isEmpty) {//如果客户端没有注册，则报错，拒绝添加Block
@@ -140,18 +143,16 @@ class BlockServerWorkerActor(conf: SparkConf, spaceManager: SpaceManager, blockI
     //TODO: [多线程访问控制]申请存储空间时候可能已经有其他客户端开始写入操作
     //通过查看client的blocks(已经写成功)，和pendingEntries(正在写)来确定
     
-    
-    spaceManager.checkSpace(size) match {
-      case Some(entryStr) => //如果本地有足够的存储空间
-        val entry = new SBlockEntry(name, entryStr, size, true)
-        pendingEntries.put(entryStr, entry)
-        //pendingClients.put(entryStr, clientId)
+    spaceManager.checkSpace(size.toInt) match {
+      case Some(entryId) => //如果本地有足够的存储空间
+        val entry = new SBlockEntry(userDefinedId, entryId, size, true)
+        pendingEntries.put(entryId, entry)
         
         Some(entry)
         
       case None => //本地空间不足，需要进行节点迁移，或者远程分配空间，或者返回错误TODO
         val remoteAddress = ""
-        val remoteEntry = new SBlockEntry(name, remoteAddress, size, false)
+        val remoteEntry = new SBlockEntry(userDefinedId, 0, size, false)
         Some(remoteEntry)
     }
 
@@ -161,20 +162,21 @@ class BlockServerWorkerActor(conf: SparkConf, spaceManager: SpaceManager, blockI
    * 写Block结果，在客户端写共享存储成功或者失败后，发消息给worker
    * 
    */
-  private def writeBlockResult(clientId: BlockServerClientId, entryStr: String, success: Boolean) = {
+  private def writeBlockResult(clientId: BlockServerClientId, entryId: Int, success: Boolean) = {
     
-    pendingEntries.remove(entryStr) match {
+    pendingEntries.remove(entryId) match {
       case Some(entry) =>
         if (success) {
-          val blockId = blockIndexer.addBlock(entryStr, entry)
+          assert(entry.entryId == entryId)
+          val blockId = blockIndexer.addBlock(entryId, entry)
           clientList.get(clientId).map { client =>//每个Client更新自己的持有Block信息
             client.addBlock(blockId, entry)
           }
-          logInfo(s"ClientId: $clientId, entry: $entryStr, Write block result successfully")
+          logInfo(s"ClientId: $clientId, entryid: $entryId, Write block result successfully")
           Some(blockId)
-        } else {//写结果失败
-          spaceManager.releaseSpace(entryStr)
-          logWarning(s"ClientId: $clientId, entry: $entryStr, Write block result failed")
+        } else {//客户端写结果失败
+          spaceManager.releaseSpace(entryId, entry.size.toInt)
+          logWarning(s"ClientId: $clientId, entry: $entryId, Write block result failed")
           None
         }
         

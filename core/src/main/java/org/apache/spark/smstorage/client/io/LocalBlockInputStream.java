@@ -5,16 +5,22 @@ import java.io.InputStream;
 
 public abstract class LocalBlockInputStream extends BlockInputStream {
   // 共享存储入口
-  protected String bufferEntry;
-
-  public LocalBlockInputStream(String bufferEntry) {
-    this.bufferEntry = bufferEntry;
+  protected int entryId;
+  protected int size;
+  protected int currPos;
+  
+  public LocalBlockInputStream(int entryId, int size) {
+    this.entryId = entryId;
+    this.size = size;
+    currPos = 0;
   }
   
-  public static LocalBlockInputStream getLocalInputStream(String type, String bufferEntry) {
+  public static LocalBlockInputStream getLocalInputStream(String type, int entryId, int size) throws IOException {
     //TODO: add MmapLocalBlockInputStream support
-    return new ShmLocalBlockInputStream(bufferEntry);
+    return new ShmLocalBlockInputStream(entryId, size);
   }
+  
+  public abstract byte[] readFully(int len) throws IOException;
   
   /**
    * skip some byte for read

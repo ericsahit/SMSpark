@@ -10,10 +10,22 @@ import org.apache.spark.storage.BlockId
  * 共享Block的id，包含必要的传递信息，以及识别
  * TODO：从SBlockId到BlockId的转换，使用隐式转换？
  * TODO：SBlockId与RDD的对应关系
+ * TODO: 在local block id中增加user defined rdd name
+ * 使用user defined rdd name+splitIndex作为userDefinedId，作为全局唯一识别的id
+ * 格式：grdd|[userDefinedId]|[splitIndex]
+ * 
+ * 新增SRDD的Block时，先传入SRDD名称，和SplitIndex，判断SRDD是否存在：
+ * 1.如果已经存在，则直接返回Entry信息
+ * 2.如果不存在，进行写SBlock流程，先返回共享存储的Entry，客户端开始写Entry，写成功之后，返回BlockId
+ * TODO：在BlockManager原有的查找Block的方法中，增加在如果SBLock，则通过LocalMemoryStore做一次远程的查找
+ * 
+ * localBlockId：本地的blockId
+ * globalBlockId：全局的blockId，由用户指定，来识别有同样的血统关系。
+ * name：全局的id，存储entryId，block写入成功前为空，否则也是全局唯一（****entryId不一定是全局唯一，多个节点之间可能会冲突）
  */
 class SBlockId(
-    val localBlockId: String,
-    val rddDepId: Long,
+    val userDefinedId: String,
+    val localBlockId: String = "",
     val name: String = "") {
   
   /**
@@ -34,27 +46,51 @@ class SBlockId(
    */
   //def rddDepId: Long
   
-  override def toString = if (name.isEmpty()) rddDepId.toString else name
-  override def hashCode = if (name.isEmpty()) rddDepId.hashCode else name.hashCode
+  override def toString = if (name.isEmpty()) userDefinedId else name
+  override def hashCode = if (name.isEmpty()) userDefinedId.hashCode else name.hashCode
   override def equals(other: Any): Boolean = other match {
-    case id: SBlockId =>
+    case o: SBlockId =>
       if (!name.isEmpty()) {
-        name.equals(id.name)
+        name.equals(o.name)
       } else {
-        rddDepId == id.rddDepId
+        userDefinedId == o.userDefinedId
       }
   }
 }
 
 object SBlockId {
-  val RDD = "rdd_([0-9]+)_([0-9]+)".r 
+  val RDD = "rdd_([0-9]+)_([0-9]+)".r
+  val SRDD = "rdd|([0-9]+)|([0-9]+)".r 
   
-  def apply(id: String) = id match {
+  /**
+   * worker端用来匹配userDefinedId，生成SBlock并且进行查找SBlock是否存在
+   * 使用userDefinedId来匹配，测试使用RDD
+   */
+  def apply(userDefinedId: String) = userDefinedId match {
     case RDD(rddId, splitIndex) =>
-      //SBlockId("rdd_" + rddId + "_" + splitIndex)
+      new SBlockId("rdd_" + rddId + "_" + splitIndex)
+    case SRDD(srddId, splitIndex) =>
+      new SBlockId("rdd_" + srddId + "_" + splitIndex)
+    case _ =>
+      throw new IllegalStateException("Unrecognized userDefinedId: " + userDefinedId)
   }
   
-  def apply(localBlockId: BlockId, rddDepId: Long = 0L) = {
-    new SBlockId(localBlockId.name, rddDepId)
+  /**
+   * local block和sblock之间的转换
+   * TODO: 在local block中增加user defined rdd name
+   * 使用user defined rdd name+splitIndex作为userDefinedId，作为全局唯一识别的id
+   * 格式：grdd|[userDefinedId]|[splitIndex]
+   * 
+   */
+  def apply(localBlockId: BlockId, userDefinedId: String = "") = {
+    if (!localBlockId.isRDD) {
+      throw new IllegalStateException("try to parse sblock which is not RDDBlock type")
+    }
+    
+    if (userDefinedId.isEmpty()) {
+      new SBlockId(localBlockId.name, localBlockId.name)
+    } else {
+      new SBlockId(userDefinedId, localBlockId.name)
+    }
   }
 }

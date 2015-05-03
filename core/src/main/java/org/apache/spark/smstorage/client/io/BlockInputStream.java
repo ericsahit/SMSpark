@@ -10,11 +10,11 @@ import java.io.InputStream;
  */
 public abstract class BlockInputStream extends InputStream {
   
-  protected boolean closed = false;
+  protected boolean isClosed = false;
   
-  public static InputStream getInputStream(Boolean local, String type, String entry) {
+  public static InputStream getInputStream(Boolean local, String type, int entryId, int size) throws IOException {
     if (local) {
-      return LocalBlockInputStream.getLocalInputStream(type, entry);
+      return LocalBlockInputStream.getLocalInputStream(type, entryId, size);
     } else {
       return null;
     }

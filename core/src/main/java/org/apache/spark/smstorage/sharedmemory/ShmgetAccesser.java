@@ -23,24 +23,21 @@ public class ShmgetAccesser {
    * @param size 要申请的共享存储空间的大小，不能超过2GB
    * @return
    */
-  public static native int init(String name, int key, long size);//申请共享内存空间
+  public native int init(String name, int key, long size);//申请共享内存空间
 
-  public static native int libshmat(int shm_id);//挂载共享内存
+  public native int libshmat(int shm_id);//挂载共享内存
 
   /**
    * 断开共享内存挂载
-   * @param id 
+   * @param id 使用libshmat方法返回的dt
    */
-  public native void libshmdt(int id);//
+  public native void libshmdt(int id);//断开共享内存挂载
 
-  //修改为static方法
-  public static native void writeData(int id, byte buf[], int len);//将数据写入共享内存
+  public native void writeData(int id, byte b[], int len);//将数据写入共享内存
 
-  public static native byte[] readData(int id, int len);//从共享内存中读取数据
+  public native byte[] readData(int id, int len);//从共享内存中读取数据
 
   public native void release(int shm_id);//释放共享内存空间
-  
-  
   
   private static final int GB = 1024 * 1024 * 1024;
   
@@ -50,7 +47,9 @@ public class ShmgetAccesser {
   
   private static ShmgetAccesser instance;
   
-  private ConcurrentHashMap<String, Integer> entryKey2indexKey;
+  private static Object lockObj = new Object(); 
+  
+  private ConcurrentHashMap<Integer, Integer> entryKey2indexKey;
   
   //private static final long 
   
@@ -61,41 +60,43 @@ public class ShmgetAccesser {
     System.load("/opt/lib/JniShm.so");//访问共享内存的动态链接库
   }
 
-  public ShmgetAccesser() {
-    indexKeySet = new BitSet(MAX_CACHE_COUNT);
-    entryKey2indexKey = new ConcurrentHashMap<String, Integer>(MAX_CACHE_COUNT/2);
+  private ShmgetAccesser(String type) {
+    if (type == "worker") {
+      indexKeySet = new BitSet(MAX_CACHE_COUNT);
+      entryKey2indexKey = new ConcurrentHashMap<Integer, Integer>(MAX_CACHE_COUNT/2);
+    }
   }
   
   public static ShmgetAccesser getInstance(String type) {
     if (instance == null) {
-      synchronized (instance) {
-        instance  = new ShmgetAccesser();
+      synchronized (lockObj) {
+        instance  = new ShmgetAccesser(type);
       }
     }
     return instance;
   }
   
   //------------------method for client---------------------//
-  public static byte[] read(int entry, int len) {
-    return readData(entry, len);
+  public byte[] read(int idx, int len) {
+    return readData(idx, len);
   }
   
-  public static void write(int entry, byte[] buf, int len) {
-    writeData(entry, buf, len);
+  public void write(int shmgetId, byte[] buf, int len) {
+    writeData(shmgetId, buf, len);
   }
   
-  public static int shmat(int entry) {
-    return libshmat(entry);
+  public int shmat(int entryId) {
+    return libshmat(entryId);
   }
   
-  public static void shmdt(int entry) {
-    libshmat(entry);
+  public void shmdt(int shmgetId) {
+    libshmdt(shmgetId);
   }
   
   //------------------method for manager---------------------//
   
   //申请size大小的共享内存空间，并且申请id
-  public synchronized String applySpace(int size) {
+  public synchronized int applySpace(int size) {
     
     if (size >= GB) {
       throw new OutOfRangeException(size, 0, GB);
@@ -103,17 +104,17 @@ public class ShmgetAccesser {
     
     int entryKey = -1;
     int indexKey = getNewIndexKey();
-    String entryStr = null;
+    //String entryStr = null;
     if (indexKey >= 0) {
       
-      entryKey = init(SM_NAME, entryKey, size);
+      entryKey = init(SM_NAME, indexKey, size);
       if (entryKey >= 0) {
-        entryStr = String.valueOf(entryKey);
-        entryKey2indexKey.put(entryStr, entryKey);
+        //entryStr = String.valueOf(entryKey);
+        entryKey2indexKey.put(entryKey, indexKey);
       }
     }
     
-    return entryStr;
+    return entryKey;
   }
   
   private int getNewIndexKey() {
@@ -131,13 +132,11 @@ public class ShmgetAccesser {
     return key;
   }
   
-  public synchronized void releaseSpace(String entryStr) {
-    int entryKey = -1;
-    try {
-      entryKey = Integer.parseInt(entryStr);
-    } catch(NumberFormatException e) {
+  public synchronized void releaseSpace(int entryId) {
+    if (entryId < 0) {
       return;
     }
+    int entryKey = -1;
     if (entryKey2indexKey.containsKey(entryKey)) {
       int indexKey = entryKey2indexKey.get(entryKey);
       release(entryKey);

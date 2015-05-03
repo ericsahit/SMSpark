@@ -46,9 +46,9 @@ private[spark] object BlockServerMessages {
   case class GetBlock(blockId: SBlockId) extends BlockServerClientToWorker
   
   //写Block
-  case class RequestNewBlock(clientId: BlockServerClientId, name: String, size: Long) extends BlockServerClientToWorker
+  case class RequestNewBlock(clientId: BlockServerClientId, userDefinedId: String, size: Long) extends BlockServerClientToWorker
   
-  case class WriteBlockResult(clientId: BlockServerClientId, entryStr: String, success: Boolean) extends BlockServerClientToWorker
+  case class WriteBlockResult(clientId: BlockServerClientId, entryId: Int, success: Boolean) extends BlockServerClientToWorker
   
   
 }
