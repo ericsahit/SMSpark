@@ -43,7 +43,10 @@ public class ShmgetAccesser {
   
   private static final int MAX_CACHE_COUNT = 1024;
   
-  private static final String SM_NAME = "smspark";
+  /**
+   * name的目录一定需要存在，否在会出现诡异问题
+   */
+  private static final String SM_NAME = "/home/hadoop/develop/lib";
   
   private static ShmgetAccesser instance;
   
@@ -56,14 +59,17 @@ public class ShmgetAccesser {
   private BitSet indexKeySet;//存储entryKey的Set
   
   static {//改动默认的PATH
-    System.setProperty("java.library.path", "/opt/lib");//动态链接库的目录
-    System.load("/opt/lib/JniShm.so");//访问共享内存的动态链接库
+    //System.setProperty("java.library.path", "/opt/lib");//动态链接库的目录
+    System.load("/home/hadoop/develop/lib/ShmgetAccesser.so");//访问共享内存的动态链接库
   }
 
   private ShmgetAccesser(String type) {
     if (type == "worker") {
       indexKeySet = new BitSet(MAX_CACHE_COUNT);
       entryKey2indexKey = new ConcurrentHashMap<Integer, Integer>(MAX_CACHE_COUNT/2);
+    } else {
+      indexKeySet = new BitSet();
+      entryKey2indexKey = new ConcurrentHashMap<Integer, Integer>();
     }
   }
   
@@ -137,9 +143,9 @@ public class ShmgetAccesser {
       return;
     }
     int entryKey = -1;
-    if (entryKey2indexKey.containsKey(entryKey)) {
-      int indexKey = entryKey2indexKey.get(entryKey);
-      release(entryKey);
+    if (entryKey2indexKey.containsKey(entryId)) {
+      int indexKey = entryKey2indexKey.get(entryId);
+      release(entryId);
       indexKeySet.clear(indexKey);
       entryKey2indexKey.remove(entryKey);
     }

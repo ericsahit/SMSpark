@@ -158,7 +158,7 @@ class LocalMemoryStore(
     //TODO: ****这里也需要做一定的抽象，将数据方便的放入到共享存储中，对上层提供一个清晰的API
     //先与worker通信，申请空间等工作，然后再写入
     //TODO: ****name怎么确定
-    var os: OutputStream = null
+    var os: LocalBlockOutputStream = null
     //TODO：访问worker节点，请求分配空间，这里应该传入唯一的共享id，userDefinedId（参见SBlockId的解释）
     serverClient.reqNewBlock(blockId.name, byteBuffer.limit()) match {
       case Some(entry) => 

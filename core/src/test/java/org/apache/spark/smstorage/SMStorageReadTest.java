@@ -36,7 +36,7 @@ public class SMStorageReadTest {
   public void setUp() {
     accesser = ShmgetAccesser.getInstance("client");
     applySize = 100*MB;
-    shmId = 720915;
+    shmId = 720915;//另一个进程申请了shmid 720915
     //shmId = Integer.parseInt(accesser.applySpace(applySize));
   }
   
@@ -111,7 +111,7 @@ public class SMStorageReadTest {
   
   @Test
   public void testReadInputStream() throws IOException {
-	    InputStream in = LocalBlockInputStream.getLocalInputStream("shmget", String.valueOf(shmId), applySize);
+	    InputStream in = LocalBlockInputStream.getLocalInputStream("shmget", shmId, applySize);
 	    Assert.assertTrue(in != null);
 	    
 	    byte[] arr = new byte[applySize];
@@ -128,7 +128,7 @@ public class SMStorageReadTest {
   
   @Test
   public void testReadInputStream2() throws IOException {
-    LocalBlockInputStream in = LocalBlockInputStream.getLocalInputStream("shmget", String.valueOf(shmId), applySize);
+    LocalBlockInputStream in = LocalBlockInputStream.getLocalInputStream("shmget", shmId, applySize);
     Assert.assertTrue(in != null);
     
     byte[] arr = in.readFully(applySize);
@@ -140,7 +140,7 @@ public class SMStorageReadTest {
     in.close();
   }
   
-  private void printByteArr(byte[] arr, int len) {
+  public static void printByteArr(byte[] arr, int len) {
 	  
 	  if (arr==null||arr.length==0) {
 		  return;
@@ -153,7 +153,7 @@ public class SMStorageReadTest {
 	    System.out.println();
   }
   
-  private void printByteArrLast(byte[] arr, int len) {
+  public static void printByteArrLast(byte[] arr, int len) {
 	    
 	    if (arr==null||arr.length==0) {
 	        return;

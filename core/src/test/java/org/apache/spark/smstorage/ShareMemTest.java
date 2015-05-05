@@ -4,6 +4,9 @@ package org.apache.spark.smstorage;
 
 public class ShareMemTest {
 	public static void main(String[] args) {
+	  
+	  
+	  
 		
 		JniShm shm = JniShm.getInstance();
 		

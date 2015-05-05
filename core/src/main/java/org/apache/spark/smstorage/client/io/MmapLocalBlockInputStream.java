@@ -10,7 +10,6 @@ import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 
-import org.apache.spark.smstorage.SMLogger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,11 +27,11 @@ public class MmapLocalBlockInputStream extends LocalBlockInputStream {
   /**
    * @param bufferEntry
    */
-  public MmapLocalBlockInputStream(String bufferEntry, int size) throws IOException {
-    super(bufferEntry, size);
+  public MmapLocalBlockInputStream(int entryId, int size) throws IOException {
+    super(entryId, size);
     // TODO Auto-generated constructor stub
     
-    buffer = getMappedByteBuffer(bufferEntry, -1);
+    buffer = getMappedByteBuffer(String.valueOf(entryId), -1);
   }
 
   /* (non-Javadoc)
@@ -50,8 +49,8 @@ public class MmapLocalBlockInputStream extends LocalBlockInputStream {
   @Override
   public void close() throws IOException {
     // TODO Auto-generated method stub
-    if (!closed) {
-      closed = true;
+    if (!isClosed) {
+      isClosed = true;
     }
   }
 
