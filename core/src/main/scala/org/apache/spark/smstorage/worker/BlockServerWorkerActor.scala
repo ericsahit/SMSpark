@@ -101,7 +101,7 @@ class BlockServerWorkerActor(conf: SparkConf, spaceManager: SpaceManager, blockI
   /**
    * 注册客户端
    */
-  private def registerClient(id: BlockServerClientId, maxMemSize: Long, clientActor: ActorRef) = {
+  def registerClient(id: BlockServerClientId, maxMemSize: Long, clientActor: ActorRef) = {
     if (!clientList.contains(id)) {
       
       clientList(id) = new ClientInfo(id, maxMemSize, System.currentTimeMillis(), clientActor)
@@ -133,7 +133,7 @@ class BlockServerWorkerActor(conf: SparkConf, spaceManager: SpaceManager, blockI
    * 申请成功：SBLockEntry
    * 申请失败：None
    */
-  private def reqNewBlock(clientId: BlockServerClientId, userDefinedId: String, size: Long): Option[SBlockEntry] = {
+  def reqNewBlock(clientId: BlockServerClientId, userDefinedId: String, size: Long): Option[SBlockEntry] = {
     
     val client = clientList.get(clientId)
     if (client.isEmpty) {//如果客户端没有注册，则报错，拒绝添加Block
@@ -162,7 +162,7 @@ class BlockServerWorkerActor(conf: SparkConf, spaceManager: SpaceManager, blockI
    * 写Block结果，在客户端写共享存储成功或者失败后，发消息给worker
    * 
    */
-  private def writeBlockResult(clientId: BlockServerClientId, entryId: Int, success: Boolean) = {
+  def writeBlockResult(clientId: BlockServerClientId, entryId: Int, success: Boolean) = {
     
     pendingEntries.remove(entryId) match {
       case Some(entry) =>
@@ -193,7 +193,7 @@ class BlockServerWorkerActor(conf: SparkConf, spaceManager: SpaceManager, blockI
    * TODO首先先根据血统信息，来判断Block是否存在
    * 
    */
-  private def getBlock(blockId: SBlockId)= {
+  def getBlock(blockId: SBlockId)= {
     blockIndexer.getBlock(blockId)
   }
   
@@ -202,7 +202,7 @@ class BlockServerWorkerActor(conf: SparkConf, spaceManager: SpaceManager, blockI
    * TODO: 遍历blockLocation，查找client，通知进程删除？
    * 
    */
-  private def removeBlock(blockId: SBlockId) = {
+  def removeBlock(blockId: SBlockId) = {
     
     blockIndexer.removeBlock(blockId).map { entry =>
       blockLocation.remove(blockId).map { locations =>
@@ -243,7 +243,7 @@ class BlockServerWorkerActor(conf: SparkConf, spaceManager: SpaceManager, blockI
 //    }
   }
   
-  private def updateBlockStatus(clientId: BlockServerClientId, blockId: SBlockId) {
+  def updateBlockStatus(clientId: BlockServerClientId, blockId: SBlockId) {
     
   }
   
@@ -252,7 +252,7 @@ class BlockServerWorkerActor(conf: SparkConf, spaceManager: SpaceManager, blockI
    * 检查最近没有心跳的client端，然后关闭它
    * 这里需要有个
    */
-  private def expirtDeadClient() {
+  def expirtDeadClient() {
     logTrace("Checking for hosts with no recent heart beats in client")
   }
 }

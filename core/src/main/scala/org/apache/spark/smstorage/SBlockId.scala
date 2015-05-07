@@ -43,6 +43,7 @@ class SBlockId(
   /**
    * RDD的id，作为判断Block是否相同的判断条件
    * TODO: 由输入+每次的变换+下一个Stage的partition+下一个Stage的变换+...组成
+   * ****现在以enrtyId为优先判断条件，然后以userDefinedId为判断条件;是否改成以userDefinedId为主要判断条件
    */
   //def rddDepId: Long
   
@@ -60,7 +61,7 @@ class SBlockId(
 
 object SBlockId {
   val RDD = "rdd_([0-9]+)_([0-9]+)".r
-  val SRDD = "rdd|([0-9]+)|([0-9]+)".r 
+  val SRDD = "srdd|([0-9]+)|([0-9]+)".r 
   
   /**
    * worker端用来匹配userDefinedId，生成SBlock并且进行查找SBlock是否存在
@@ -70,7 +71,7 @@ object SBlockId {
     case RDD(rddId, splitIndex) =>
       new SBlockId("rdd_" + rddId + "_" + splitIndex)
     case SRDD(srddId, splitIndex) =>
-      new SBlockId("rdd_" + srddId + "_" + splitIndex)
+      new SBlockId("srdd_" + srddId + "_" + splitIndex)
     case _ =>
       throw new IllegalStateException("Unrecognized userDefinedId: " + userDefinedId)
   }

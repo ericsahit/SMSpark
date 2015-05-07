@@ -18,7 +18,7 @@ import java.io.ObjectInput
  * TODO: ****KryoSerializer中含有序列化的类
  * TODO: ****
  */
-class BlockServerClientId private (
+private[spark] class BlockServerClientId (
     private var executorId_ : String,
     private var host_ : String,
     private var port_ : Int)
