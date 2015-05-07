@@ -232,7 +232,7 @@ class LocalMemoryStore(
     
     var is: LocalBlockInputStream = null
     if (entry.local) {
-      is = LocalBlockInputStream.getLocalInputStream("shmget", entry.entryStr, entry.size.toInt)
+      is = LocalBlockInputStream.getLocalInputStream("shmget", entry.entryId, entry.size.toInt)
     } else {//远程Block
       //is = 
     }
@@ -263,7 +263,7 @@ class LocalMemoryStore(
     
     var is: LocalBlockInputStream = null
     if (entry.local) {
-      is = LocalBlockInputStream.getLocalInputStream("shmget", entry.entryStr, entry.size.toInt)
+      is = LocalBlockInputStream.getLocalInputStream("shmget", entry.entryId, entry.size.toInt)
     } else {//远程Block
       //is = 
     }
