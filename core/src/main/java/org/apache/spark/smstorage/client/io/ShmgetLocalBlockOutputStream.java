@@ -8,6 +8,7 @@ import java.io.IOException;
 import org.apache.spark.Logging;
 import org.apache.spark.smstorage.sharedmemory.ShmgetAccesser;
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * @author hwang
@@ -15,7 +16,8 @@ import org.slf4j.Logger;
  */
 public class ShmgetLocalBlockOutputStream extends LocalBlockOutputStream {
   
-  private static Logger LOG = Logging.log_;
+  //private static Logger LOG = Logging.log_;
+  private static final Logger LOG = LoggerFactory.getLogger(ShmgetLocalBlockOutputStream.class);
   
   private ShmgetAccesser accesser;
   
