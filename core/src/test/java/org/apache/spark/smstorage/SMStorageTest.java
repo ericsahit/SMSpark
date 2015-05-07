@@ -32,13 +32,13 @@ public class SMStorageTest {
   public void setUp() {
     accesser = ShmgetAccesser.getInstance("worker");
     
-    shmId = Integer.parseInt(accesser.applySpace(applySize));
+    shmId = accesser.applySpace(applySize);
     printByteArr(null, 0);
   }
   
   @After
   public void close() {
-    accesser.releaseSpace(String.valueOf(shmId));
+    String.valueOf(shmId);
   }
   
   
@@ -148,7 +148,7 @@ read once end, length: 0, time spent: 99
   
   @Test
   public void testReadInputStream() throws IOException {
-    InputStream in = LocalBlockInputStream.getLocalInputStream("shmget", String.valueOf(shmId), applySize);
+    InputStream in = LocalBlockInputStream.getLocalInputStream("shmget", shmId, applySize);
     Assert.assertTrue(in != null);
     
     byte[] arr = new byte[applySize];
@@ -163,7 +163,7 @@ read once end, length: 0, time spent: 99
   
   @Test
   public void testReadInputStream2() throws IOException {
-    LocalBlockInputStream in = LocalBlockInputStream.getLocalInputStream("shmget", String.valueOf(shmId), applySize);
+    LocalBlockInputStream in = LocalBlockInputStream.getLocalInputStream("shmget", shmId, applySize);
     Assert.assertTrue(in != null);
     
     byte[] arr = in.readFully(applySize);
