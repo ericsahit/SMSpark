@@ -96,10 +96,12 @@ class LocalMemoryStore(
   private def fetchBlockIfNotExist(blockId: SBlockId) = {
     var entry: SBlockEntry = null
     if (!entries.containsKey(blockId)) {
-      entry = serverClient.getBlock(blockId)
-      if (entry != null) {
+      
+      serverClient.getBlock(blockId).map { res =>
+        entry = res
         entries.put(blockId, entry)
       }
+
     } else {
       entry = entries.get(blockId)
     }

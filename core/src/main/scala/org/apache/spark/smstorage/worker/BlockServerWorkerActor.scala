@@ -77,10 +77,10 @@ class BlockServerWorkerActor(conf: SparkConf, spaceManager: SpaceManager, blockI
       sender ! writeBlockResult(clientId, entryId, success)
     
     case GetBlock(blockId) =>
-      getBlock(blockId)
+      sender ! getBlock(blockId)
     
     case ExpireDeadClient =>
-      expirtDeadClient()
+      sender ! expirtDeadClient()
       
     case RemoveBlock(blockId) =>
       removeBlock(blockId)
@@ -91,7 +91,7 @@ class BlockServerWorkerActor(conf: SparkConf, spaceManager: SpaceManager, blockI
 //      updateBlockStatus(clientId, blockId)
       
     case BlockContains(blockId, local) => //TODO：是否本地？
-      blockIndexer.contains(blockId)
+      sender ! blockIndexer.contains(blockId)
 
 
     case other =>
@@ -104,7 +104,7 @@ class BlockServerWorkerActor(conf: SparkConf, spaceManager: SpaceManager, blockI
   def registerClient(id: BlockServerClientId, maxMemSize: Long, clientActor: ActorRef) = {
     if (!clientList.contains(id)) {
       
-      clientList(id) = new ClientInfo(id, maxMemSize, System.currentTimeMillis(), clientActor)
+      clientList(id) = new ClientInfo(id, System.currentTimeMillis(), maxMemSize, clientActor)
       
       spaceManager.totalMemory += maxMemSize
       

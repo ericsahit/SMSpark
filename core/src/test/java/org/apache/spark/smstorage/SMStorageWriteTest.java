@@ -105,7 +105,7 @@ public class SMStorageWriteTest {
     in.close();
   }
   
-  private void printByteArr(byte[] arr, int len) {
+  public static void printByteArr(byte[] arr, int len) {
 	  
 	  if (arr==null||arr.length==0) {
 		  return;
@@ -118,7 +118,7 @@ public class SMStorageWriteTest {
 	    System.out.println();
   }
   
-  private void printByteArrLast(byte[] arr, int len) {
+  public static void printByteArrLast(byte[] arr, int len) {
 	    
 	    if (arr==null||arr.length==0) {
 	        return;

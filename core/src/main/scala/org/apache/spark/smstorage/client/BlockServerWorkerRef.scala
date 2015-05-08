@@ -72,8 +72,8 @@ class BlockServerClient(val clientId: BlockServerClientId, var blockServerWorker
    * 从共享存储得到一个Block，返回BlockEntry信息，其中包含Block
    * TODO：askBlockServerWithReply超时了怎么办？
    */
-  def getBlock(blockId: SBlockId): SBlockEntry = {
-      askBlockServerWithReply[Option[SBlockEntry]](GetBlock(blockId)).get
+  def getBlock(blockId: SBlockId): Option[SBlockEntry] = {
+      askBlockServerWithReply[Option[SBlockEntry]](GetBlock(blockId))
   }
   
   /**
