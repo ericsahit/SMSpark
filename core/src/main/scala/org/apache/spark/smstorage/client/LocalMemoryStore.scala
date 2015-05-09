@@ -243,7 +243,7 @@ class LocalMemoryStore(
     try {
       val bs = is.readFully(entry.size.toInt)
       //TODO：增加blockManager.dataDeserialize方法对于inputStream的支持
-      //目前做法是先全部读取到堆内存，然后再
+      //目前做法是先全部读取到堆内存，然后再返回给上层调用
       return Some(blockManager.dataDeserialize(blockId, ByteBuffer.wrap(bs)))
     } catch {
       case ioe: IOException =>

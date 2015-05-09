@@ -9,6 +9,7 @@ import org.apache.spark.smstorage.SBlockEntry
 import java.util.LinkedHashMap
 import org.apache.spark.smstorage.SBlockEntry
 import org.apache.spark.util.TimeStampedHashMap
+import org.apache.spark.smstorage.SBlockEntry
 
 /**
  * @author hwang
@@ -74,8 +75,9 @@ private[spark] class BlockIndexer {
   }
   
   
-  def clear() {
+  def clear(f: (SBlockEntry) => Unit) {
     blockList.synchronized {
+      blockList.values.foreach(f)
       blockList.clear()
       currentMemory = 0L
     }

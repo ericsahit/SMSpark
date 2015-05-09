@@ -66,11 +66,15 @@ class BlockServerWorkerActor(conf: SparkConf, spaceManager: SpaceManager, blockI
   }
   
   /**
-   * 清理工作
+   * TODO：清理工作
    */
   override def postStop() {
-    spaceManager
+    def clearEntry(entry: SBlockEntry) = spaceManager.releaseSpace(entry.entryId, entry.size.toInt)
+    pendingEntries.values.foreach(clearEntry)
+    blockIndexer.clear(clearEntry)
   }
+  
+  
   
   override def receiveWithLogging = {
     
@@ -220,36 +224,12 @@ class BlockServerWorkerActor(conf: SparkConf, spaceManager: SpaceManager, blockI
             client.removeBlock(blockId)
             //通知本地的其他进程进程，删除Block
             //TODO：通知协调者节点，或者其他的worker进程？
-            client.clientActor.ask(RemoveBlock(blockId))(akkaTimeout)
+            //client.clientActor.ask(RemoveBlock(blockId))(akkaTimeout)
           }
         }
       }
+      spaceManager.releaseSpace(entry.entryId, entry.size.toInt)
     }
-
-//    blocks.remove(blockId) match {
-//      case Some(b) =>
-//        blockLocation.get(blockId) match {
-//          case Some(locations) =>
-//            locations.foreach { clientId =>
-//              clientList.get(clientId) match {
-//                case Some(client) =>
-//                  client.removeBlock(blockId)
-//                  //通知本地的其他进程进程，删除Block
-//                  //TODO：通知协调者节点，或者其他的worker进程？
-//                  client.clientActor.ask(RemoveBlock(blockId))(akkaTimeout)
-//                  
-//                case None =>
-//              }
-//              
-//            }
-//          case None =>
-//        }
-//          
-//        blockLocation.remove(blockId)
-//        
-//      case None =>
-//        //throw new BlockException(blockId, s"Block $blockId not found on disk, though it should be")
-//    }
   }
   
   def updateBlockStatus(clientId: BlockServerClientId, blockId: SBlockId) {
