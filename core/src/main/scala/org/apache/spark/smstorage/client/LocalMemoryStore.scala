@@ -166,7 +166,7 @@ class LocalMemoryStore(
       case Some(entry) => 
         var success = true
         try {
-          //TODO: 写入共享存储的实现机制
+          //TODO: 远程写
           os = LocalBlockOutputStream.getLocalOutputStream("shmget", entry.entryId, byteBuffer.limit())
           //os = BlockOutputStream("shmget", entry.entryStr)
           os.write(byteBuffer.array())
@@ -257,7 +257,7 @@ class LocalMemoryStore(
   override def getBytes(blockId: BlockId): Option[ByteBuffer] = {
     
     val sid = SBlockId(blockId);
-    val entry = serverClient.getBlock(sid);
+    val entry = fetchBlockIfNotExist(sid)
     if (entry == null || entry.size <= 0) {
       logWarning(s"request block $sid from SharedMemoryStore doesn't have or no content")
       None

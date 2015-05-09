@@ -26,6 +26,7 @@ import org.apache.spark.util.{ActorLogReceive, AkkaUtils, Utils, TimeStampedHash
  * TODO: 每一个Block保持一个计数器，如果没有任何程序使用，表明可以删除。如果有计数器不为0，可以被替换或者
  * TODO: Worker节点向Client发送命令
  * TODO：SBlock的id匹配机制，根据RDD血统信息来进行匹配
+ * TODO：各个组件的清理工作
  */
 private[spark]
 class BlockServerWorkerActor(conf: SparkConf, spaceManager: SpaceManager, blockIndexer: BlockIndexer)  
@@ -62,6 +63,13 @@ class BlockServerWorkerActor(conf: SparkConf, spaceManager: SpaceManager, blockI
         ExpireDeadClient)
     
     super.preStart()
+  }
+  
+  /**
+   * 清理工作
+   */
+  override def postStop() {
+    spaceManager
   }
   
   override def receiveWithLogging = {
@@ -153,7 +161,8 @@ class BlockServerWorkerActor(conf: SparkConf, spaceManager: SpaceManager, blockI
       case None => //本地空间不足，需要进行节点迁移，或者远程分配空间，或者返回错误TODO
         val remoteAddress = ""
         val remoteEntry = new SBlockEntry(userDefinedId, 0, size, false)
-        Some(remoteEntry)
+        //Some(remoteEntry)
+        None
     }
 
   }

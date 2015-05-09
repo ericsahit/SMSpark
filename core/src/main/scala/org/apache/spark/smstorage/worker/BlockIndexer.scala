@@ -67,9 +67,10 @@ private[spark] class BlockIndexer {
   /**
    * TODO：新建一个SBlockId
    * 这里生成的SBlockId，localId为空
+   * name=entryId, userDefinedId由客户端来指定
    */
   private def createNewBlockId(entryId: Int, userDefinedId: String): SBlockId = {
-    new SBlockId(userDefinedId, name = entryId.toString)
+    new SBlockId(userDefinedId, "", entryId.toString)
   }
   
   

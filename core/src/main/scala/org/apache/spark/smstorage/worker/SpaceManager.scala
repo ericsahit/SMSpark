@@ -54,4 +54,8 @@ private[spark] class SpaceManager(
     totalMemory += size
   }
   
+  def close() {
+    
+  }
+  
 }
