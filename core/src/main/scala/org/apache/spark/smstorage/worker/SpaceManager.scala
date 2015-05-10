@@ -40,7 +40,6 @@ private[spark] class SpaceManager(
       None
     } else {
       usedMemory += reqMemSize
-      totalMemory -= reqMemSize
       Some(smManager.applySpace(reqMemSize));
     }
   }
@@ -51,7 +50,6 @@ private[spark] class SpaceManager(
   def releaseSpace(entryId: Int, size: Int) {
     smManager.realseSpace(entryId);
     usedMemory -= size
-    totalMemory += size
   }
   
   def close() {

@@ -28,7 +28,7 @@ import java.util.concurrent.TimeUnit
 
 /**
  * @author hwang
- *
+ * TODO：模拟客户端Executor建立连接，然后进行并发的读写
  */
 class BlockServerWorkerSuite extends FunSuite with BeforeAndAfter {
   
@@ -90,21 +90,21 @@ class BlockServerWorkerSuite extends FunSuite with BeforeAndAfter {
 //    val blockIndexer: BlockIndexer = new BlockIndexer()
 //    val worker: BlockServerWorkerActor = new BlockServerWorkerActor(conf, spaceManager, blockIndexer)
     
-    assert(client.reqNewBlock("srdd01", 100).isEmpty)
+    //assert(client.reqNewBlock("srdd01", 100).isEmpty)
     //client.registerClient(15*MB, null)
 
   }
   
   test("test worker actor write block") {
     
-    val blockId = new RDDBlockId(1, 2)
+    val blockId = new RDDBlockId(2, 1)
     val sblockId = SBlockId(blockId)
     
     assert(client.getBlock(sblockId).isEmpty)
     //assert(client.getBlockSize(sblockId))
     
     val userDefinedId = sblockId.userDefinedId;
-    assert(userDefinedId == "rdd_1_2")
+    assert(userDefinedId == "rdd_2_1")
 
     assert(client.reqNewBlock(userDefinedId, MB*20).isEmpty)
     
@@ -167,21 +167,42 @@ class BlockServerWorkerSuite extends FunSuite with BeforeAndAfter {
   }
   
   test("test worker concurrent write read block") {
-    val num = 4
-    val pool = Executors.newFixedThreadPool(num)
+    //测试并发的读写共享内存
+    //已测试申请200个共享内存，测试成功
+    val num = 8//申请8*2=16MB超过15MB，则第八个申请时会失败
+    //val pool = Executors.newFixedThreadPool(num) //使用Executors，线程的异常会被隐藏，不向上抛出
     for (i <- 1 to num) {
-      pool.submit(new Runnable() {
+
+      new Thread(new Runnable() {
         def run() {
           testConcurrentReadWrite(i)
         }
-      })
+      }).run()
+
     }
-    
-    pool.awaitTermination(1, TimeUnit.MINUTES)
+    Thread.sleep(10000)
+    //pool.awaitTermination(20, TimeUnit.SECONDS)
   }
   
-  def testConcurrentReadWrite(index: Int) {
-        val blockId = new RDDBlockId(1, index)
+  test("test worker once write mutil read block") {
+    //写一次RDD，使用多个线程来模拟并发的读
+    val sblockId = testWriteBlock(10, 2*MB)
+    
+    val num=7
+    for (i <- 1 to num) {
+
+      new Thread(new Runnable() {
+        def run() {
+          testReadBlock(sblockId, 10)
+        }
+      }).run()
+
+    }
+    Thread.sleep(10000)
+  }
+  
+  def testWriteBlock(index: Int, size: Int=2*MB) = {
+    val blockId = new RDDBlockId(1, index)
     val sblockId = SBlockId(blockId)
     
     assert(client.getBlock(sblockId).isEmpty)
@@ -189,7 +210,7 @@ class BlockServerWorkerSuite extends FunSuite with BeforeAndAfter {
     
     val userDefinedId = sblockId.userDefinedId;
     assert(userDefinedId == "rdd_1_"+index)
-
+    println(sblockId.userDefinedId+" thread begin write")
     //assert(client.reqNewBlock(userDefinedId, MB*20).isEmpty)
     
     val size=2*MB
@@ -211,6 +232,71 @@ class BlockServerWorkerSuite extends FunSuite with BeforeAndAfter {
     
     SMStorageWriteTest.printByteArr(byteArr, 100)
     SMStorageWriteTest.printByteArrLast(byteArr, 100)
+    
+    val os = LocalBlockOutputStream.getLocalOutputStream("shmget", entry.entryId, byteBuffer.limit())
+    os.write(byteBuffer.array())
+    os.close()
+    
+    val newblockid = client.writeBlockResult(entry.entryId, true)
+    assert(newblockid.isDefined)
+    assert(newblockid.get.userDefinedId == sblockId.userDefinedId)
+    
+    newblockid.get
+  }
+  
+  def testReadBlock(sblockId: SBlockId, index: Int) {
+    
+    val entry2 = client.getBlock(sblockId).get
+    println(entry2.entryId)
+    
+    var is: LocalBlockInputStream = null
+    if (entry2.local) {
+      is = LocalBlockInputStream.getLocalInputStream("shmget", entry2.entryId, entry2.size.toInt)
+    } else {//远程Block
+      //is = 
+    }
+    assert(is != null)
+    val bs = is.readFully(entry2.size.toInt)
+    is.close()
+
+    assert(bs(0)==(100+index-1).toByte)
+    assert(bs(bs.length-1)==(100+index+1).toByte)
+    
+    SMStorageWriteTest.printByteArr(bs, 100)
+    SMStorageWriteTest.printByteArrLast(bs, 100)    
+  }
+  
+  def testConcurrentReadWrite(index: Int) {
+    val blockId = new RDDBlockId(1, index)
+    val sblockId = SBlockId(blockId)
+    
+    assert(client.getBlock(sblockId).isEmpty)
+    //assert(client.getBlockSize(sblockId))
+    
+    val userDefinedId = sblockId.userDefinedId;
+    assert(userDefinedId == "rdd_1_"+index)
+    println(sblockId.userDefinedId+" thread begin write")
+    //assert(client.reqNewBlock(userDefinedId, MB*20).isEmpty)
+    
+    val size=2*MB
+    val res = client.reqNewBlock(userDefinedId, size)
+    assert(res.isDefined)
+    
+    val entry=res.get
+    
+    val byteArr = new Array[Byte](size)
+    var i=0
+    while (i<byteArr.length) {
+      byteArr(i)=100
+      i=i+1
+    }
+    byteArr(0)=(100+index-1).toByte
+    byteArr(byteArr.length-1)=(100+index+1).toByte
+    
+    val byteBuffer=ByteBuffer.wrap(byteArr)
+    
+    //SMStorageWriteTest.printByteArr(byteArr, 100)
+    //SMStorageWriteTest.printByteArrLast(byteArr, 100)
     
     val os = LocalBlockOutputStream.getLocalOutputStream("shmget", entry.entryId, byteBuffer.limit())
     os.write(byteBuffer.array())
@@ -248,7 +334,6 @@ class BlockServerWorkerSuite extends FunSuite with BeforeAndAfter {
     SMStorageWriteTest.printByteArr(bs, 100)
     SMStorageWriteTest.printByteArrLast(bs, 100)    
   }
-  
   
 
 }
