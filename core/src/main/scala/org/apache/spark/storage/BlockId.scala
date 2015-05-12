@@ -49,7 +49,8 @@ sealed abstract class BlockId {
 }
 
 @DeveloperApi
-case class RDDBlockId(rddId: Int, splitIndex: Int) extends BlockId {
+/** [SMSpark] add userDefinedId as globally unique identifier. */
+case class RDDBlockId(rddId: Int, splitIndex: Int, userDefinedId: String = null) extends BlockId {
   def name = "rdd_" + rddId + "_" + splitIndex
 }
 

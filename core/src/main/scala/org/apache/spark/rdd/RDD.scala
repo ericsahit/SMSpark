@@ -140,7 +140,8 @@ abstract class RDD[T: ClassTag](
   val id: Int = sc.newRddId()
 
   /** A friendly name for this RDD */
-  @transient var name: String = null
+  /** [SMSPark]: use name as unique User Defined ID, so remove transient tag */
+  var name: String = null
 
   /** Assign a name to this RDD */
   def setName(_name: String): this.type = {

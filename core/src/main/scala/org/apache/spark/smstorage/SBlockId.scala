@@ -47,14 +47,14 @@ class SBlockId(
    */
   //def rddDepId: Long
   
-  override def toString = if (name.isEmpty()) userDefinedId else name
-  override def hashCode = if (name.isEmpty()) userDefinedId.hashCode else name.hashCode
+  override def toString = if (userDefinedId.isEmpty()) name else userDefinedId
+  override def hashCode = if (userDefinedId.isEmpty()) name.hashCode else userDefinedId.hashCode
   override def equals(other: Any): Boolean = other match {
     case o: SBlockId =>
-      if (!name.isEmpty()) {
-        name.equals(o.name)
+      if (!userDefinedId.isEmpty()) {
+        userDefinedId.equals(o.userDefinedId)
       } else {
-        userDefinedId == o.userDefinedId
+        name == o.name
       }
   }
 }
@@ -66,6 +66,7 @@ object SBlockId {
   /**
    * worker端用来匹配userDefinedId，生成SBlock并且进行查找SBlock是否存在
    * 使用userDefinedId来匹配，测试使用RDD
+   * TODO：userDefinedId格式的确定
    */
   def apply(userDefinedId: String) = userDefinedId match {
     case RDD(rddId, splitIndex) =>
@@ -78,20 +79,22 @@ object SBlockId {
   
   /**
    * local block和sblock之间的转换
-   * TODO: 在local block中增加user defined rdd name
    * 使用user defined rdd name+splitIndex作为userDefinedId，作为全局唯一识别的id
    * 格式：grdd|[userDefinedId]|[splitIndex]
+   * 目前格式：[userDefinedId]|[splitIndex]，在CacheManager.get中生成
    * 
    */
-  def apply(localBlockId: BlockId, userDefinedId: String = "") = {
-    if (!localBlockId.isRDD) {
+  def apply(localBlockId: BlockId) = {
+    val rddBlockId = localBlockId.asRDDId
+    if (rddBlockId.isEmpty) {
       throw new IllegalStateException("try to parse sblock which is not RDDBlock type")
     }
     
-    if (userDefinedId.isEmpty()) {
-      new SBlockId(localBlockId.name, localBlockId.name)
+    val userId = rddBlockId.get.userDefinedId
+    if (userId == null || userId.isEmpty()) {
+      new SBlockId(rddBlockId.get.name, rddBlockId.get.name)
     } else {
-      new SBlockId(userDefinedId, localBlockId.name)
+      new SBlockId(userId, rddBlockId.get.name)
     }
   }
 }

@@ -52,10 +52,14 @@ class BlockServerWorkerSuite extends FunSuite with BeforeAndAfter {
     assert(sblockId.localBlockId === "rdd_1_2")
     
     //assert(sblockId == SBlockId())
-    val sblockId2 = SBlockId(blockId, "srdd_1_2")
+    
+    
+    val blockId2 = new RDDBlockId(1, 2, "KMeansInput")
+    
+    val sblockId2 = SBlockId(blockId)
     assert(sblockId != sblockId2)
     
-    val sblockId3 = new SBlockId("srdd_1_2")
+    val sblockId3 = new SBlockId("KMeansInput")
     assert(sblockId3 == sblockId2)
     
     
@@ -97,14 +101,14 @@ class BlockServerWorkerSuite extends FunSuite with BeforeAndAfter {
   
   test("test worker actor write block") {
     
-    val blockId = new RDDBlockId(2, 1)
+    val blockId = new RDDBlockId(2, 1, "KMeansInput")
     val sblockId = SBlockId(blockId)
     
     assert(client.getBlock(sblockId).isEmpty)
     //assert(client.getBlockSize(sblockId))
     
     val userDefinedId = sblockId.userDefinedId;
-    assert(userDefinedId == "rdd_2_1")
+    assert(userDefinedId == "KMeansInput")
 
     assert(client.reqNewBlock(userDefinedId, MB*20).isEmpty)
     

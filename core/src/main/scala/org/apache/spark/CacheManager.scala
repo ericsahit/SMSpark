@@ -39,7 +39,13 @@ private[spark] class CacheManager(blockManager: BlockManager) extends Logging {
       context: TaskContext,
       storageLevel: StorageLevel): Iterator[T] = {
 
-    val key = RDDBlockId(rdd.id, partition.index)
+    /** [SMSPark]: use name as unique User Defined ID, so load name to RDDBlockId for identity. */
+    //val key = RDDBlockId(rdd.id, partition.index)
+    val key = if (rdd.name != null) {
+      RDDBlockId(rdd.id, partition.index, rdd.name + "|" + partition.index)
+    } else {
+      RDDBlockId(rdd.id, partition.index)
+    }
     logDebug(s"Looking for partition $key")
     blockManager.get(key) match {
       case Some(blockResult) =>

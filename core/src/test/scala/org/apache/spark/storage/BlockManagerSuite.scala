@@ -978,7 +978,7 @@ class BlockManagerSuite extends FunSuite with Matchers with BeforeAndAfterEach
       store.putIterator(blockId, list.iterator, StorageLevel.MEMORY_ONLY, tellMaster = true)
     }
     val matchedBlockIds = store.master.getMatchingBlockIds(_ match {
-      case RDDBlockId(1, _) => true
+      case RDDBlockId(1, _, _) => true
       case _ => false
     }, askSlaves = true)
     assert(matchedBlockIds.toSet === Set(RDDBlockId(1, 0), RDDBlockId(1, 1)))
