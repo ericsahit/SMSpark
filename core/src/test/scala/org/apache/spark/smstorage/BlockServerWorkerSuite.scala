@@ -56,7 +56,7 @@ class BlockServerWorkerSuite extends FunSuite with BeforeAndAfter {
     
     val blockId2 = new RDDBlockId(1, 2, "KMeansInput")
     
-    val sblockId2 = SBlockId(blockId)
+    val sblockId2 = SBlockId(blockId2)
     assert(sblockId != sblockId2)
     
     val sblockId3 = new SBlockId("KMeansInput")
@@ -70,14 +70,10 @@ class BlockServerWorkerSuite extends FunSuite with BeforeAndAfter {
     val (actorSystem, port) = AkkaUtils.createActorSystem("test", hostname, 0, conf, securityManager)
     this.actorSystem = actorSystem
     
-    val smManager: SMemoryManager = new SMemoryManager()
-    val spaceManager: SpaceManager = new SpaceManager(0, smManager)
-    val blockIndexer: BlockIndexer = new BlockIndexer()
-    
-    worker = actorSystem.actorOf(Props(new BlockServerWorkerActor(conf, spaceManager, blockIndexer)), "worker")
+    worker = actorSystem.actorOf(Props(new BlockServerWorkerActor(conf)), "worker")
     val clientId: BlockServerClientId = new BlockServerClientId("test", "localhost", 9999)
     client = new BlockServerClient(clientId, worker, conf)
-    client.registerClient(15*MB, null)
+    client.registerClient(20*MB, null)
   }
   after {
     actorSystem.shutdown()
@@ -101,14 +97,14 @@ class BlockServerWorkerSuite extends FunSuite with BeforeAndAfter {
   
   test("test worker actor write block") {
     
-    val blockId = new RDDBlockId(2, 1, "KMeansInput")
+    val blockId = new RDDBlockId(2, 1, "KMeansInput|"+1)
     val sblockId = SBlockId(blockId)
     
     assert(client.getBlock(sblockId).isEmpty)
     //assert(client.getBlockSize(sblockId))
     
     val userDefinedId = sblockId.userDefinedId;
-    assert(userDefinedId == "KMeansInput")
+    assert(userDefinedId == "KMeansInput|"+i)
 
     assert(client.reqNewBlock(userDefinedId, MB*20).isEmpty)
     

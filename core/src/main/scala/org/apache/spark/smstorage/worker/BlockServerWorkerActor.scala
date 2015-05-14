@@ -15,6 +15,7 @@ import org.apache.spark.smstorage._
 import akka.actor.{Actor, ActorRef, Cancellable}
 import akka.pattern.ask
 import org.apache.spark.util.{ActorLogReceive, AkkaUtils, Utils, TimeStampedHashMap}
+import org.apache.spark.smstorage.sharedmemory.SMemoryManager
 
 /**
  * @author hwang
@@ -29,8 +30,12 @@ import org.apache.spark.util.{ActorLogReceive, AkkaUtils, Utils, TimeStampedHash
  * TODO：各个组件的清理工作
  */
 private[spark]
-class BlockServerWorkerActor(conf: SparkConf, spaceManager: SpaceManager, blockIndexer: BlockIndexer)  
+class BlockServerWorkerActor(conf: SparkConf)  
   extends Actor with ActorLogReceive with Logging {
+  
+  val smManager: SMemoryManager = new SMemoryManager()
+  val spaceManager: SpaceManager = new SpaceManager(0, smManager)
+  val blockIndexer: BlockIndexer = new BlockIndexer()  
   
   
   private val clientList = new mutable.HashMap[BlockServerClientId, ClientInfo]

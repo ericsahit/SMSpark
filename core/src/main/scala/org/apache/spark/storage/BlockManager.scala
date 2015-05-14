@@ -19,16 +19,13 @@ package org.apache.spark.storage
 
 import java.io.{BufferedOutputStream, ByteArrayOutputStream, File, InputStream, OutputStream}
 import java.nio.{ByteBuffer, MappedByteBuffer}
-
 import scala.collection.mutable.{ArrayBuffer, HashMap}
 import scala.concurrent.{Await, Future}
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.util.Random
-
-import akka.actor.{ActorSystem, Props}
+import akka.actor.{ActorSystem, Props, ActorRef}
 import sun.nio.ch.DirectBuffer
-
 import org.apache.spark._
 import org.apache.spark.executor._
 import org.apache.spark.io.CompressionCodec
@@ -41,6 +38,10 @@ import org.apache.spark.serializer.Serializer
 import org.apache.spark.shuffle.ShuffleManager
 import org.apache.spark.shuffle.hash.HashShuffleManager
 import org.apache.spark.util._
+import org.apache.spark.smstorage.client.LocalMemoryStore
+import org.apache.spark.smstorage.client.BlockServerClient
+import org.apache.spark.smstorage.BlockServerClientId
+import org.apache.spark.smstorage.client.LocalMemoryStore
 
 private[spark] sealed trait BlockValues
 private[spark] case class ByteBufferValues(buffer: ByteBuffer) extends BlockValues
@@ -73,7 +74,8 @@ private[spark] class BlockManager(
     shuffleManager: ShuffleManager,
     blockTransferService: BlockTransferService,
     securityManager: SecurityManager,
-    numUsableCores: Int)
+    numUsableCores: Int,
+    bsWorker: ActorRef = null)
   extends BlockDataManager with Logging {
 
   val diskBlockManager = new DiskBlockManager(this, conf)
@@ -94,6 +96,9 @@ private[spark] class BlockManager(
     tachyonInitialized = true
     new TachyonStore(this, tachyonBlockManager)
   }
+  
+  //[SMSpark]: TODO: 需要传入Worker的通信地址
+  private[spark] var sharedStore: LocalMemoryStore = null;
 
   private[spark]
   val externalShuffleServiceEnabled = conf.getBoolean("spark.shuffle.service.enabled", false)
@@ -175,9 +180,10 @@ private[spark] class BlockManager(
       shuffleManager: ShuffleManager,
       blockTransferService: BlockTransferService,
       securityManager: SecurityManager,
-      numUsableCores: Int) = {
+      numUsableCores: Int,
+      bsWorker: ActorRef = null) = {
     this(execId, actorSystem, master, serializer, BlockManager.getMaxMemory(conf),
-      conf, mapOutputTracker, shuffleManager, blockTransferService, securityManager, numUsableCores)
+      conf, mapOutputTracker, shuffleManager, blockTransferService, securityManager, numUsableCores, bsWorker)
   }
 
   /**
@@ -207,6 +213,20 @@ private[spark] class BlockManager(
     // Register Executors' configuration with the local shuffle service, if one should exist.
     if (externalShuffleServiceEnabled && !blockManagerId.isDriver) {
       registerWithExternalShuffleServer()
+    }
+    
+    /** [SMSPark]: init client and register to Block Server Worker. */
+    if (conf.getBoolean("spark.smspark.enable", false)) {
+      
+      //TODO: 是否需要客户端的Actor？
+//      val slaveActor = actorSystem.actorOf(
+//        Props(new BlockManagerSlaveActor(this, mapOutputTracker)),
+//        name = "BlockServerClientActor" + BlockManager.ID_GENERATOR.next)
+      
+      val clientId = BlockServerClientId(executorId, blockTransferService.hostName, blockTransferService.port)
+      val client = new BlockServerClient(clientId, bsWorker, conf)
+      sharedStore = new LocalMemoryStore(this, maxMemory, client)
+      client.registerClient(maxMemory, slaveActor)
     }
   }
 
@@ -494,20 +514,41 @@ private[spark] class BlockManager(
 
         // Look for the block in Tachyon
         if (level.useOffHeap) {
-          logDebug(s"Getting block $blockId from tachyon")
-          if (tachyonStore.contains(blockId)) {
-            tachyonStore.getBytes(blockId) match {
-              case Some(bytes) =>
+          
+          if (conf.getBoolean("spark.smspark.enable", false)) {
+            logDebug(s"Getting block $blockId from shared memory store")
+            if (sharedStore.contains(blockId)) {
+              tachyonStore.getBytes(blockId) match {
+                case Some(bytes) =>
+                  if (!asBlockResult) {
+                    return Some(bytes)
+                  } else {
+                    //使用Disk来代表从Shared Memory Store读入
+                    return Some(new BlockResult(
+                        dataDeserialize(blockId, bytes), DataReadMethod.Disk, info.size))
+                  }
+                case None =>
+                  logDebug(s"Block $blockId not found in shared memory store")
+              }
+            }
+            
+          } else {            
+            logDebug(s"Getting block $blockId from tachyon")
+            if (tachyonStore.contains(blockId)) {
+              tachyonStore.getBytes(blockId) match {
+                case Some(bytes) =>
                 if (!asBlockResult) {
                   return Some(bytes)
                 } else {
                   return Some(new BlockResult(
-                    dataDeserialize(blockId, bytes), DataReadMethod.Memory, info.size))
+                      dataDeserialize(blockId, bytes), DataReadMethod.Memory, info.size))
                 }
-              case None =>
+                case None =>
                 logDebug(s"Block $blockId not found in tachyon")
+              }
             }
           }
+          
         }
 
         // Look for block on disk, potentially storing it back in memory if required
@@ -769,7 +810,12 @@ private[spark] class BlockManager(
             (true, memoryStore)
           } else if (putLevel.useOffHeap) {
             // Use tachyon for off-heap storage
-            (false, tachyonStore)
+            /** [SMSPark]: if enable, off-heap level use Shared Memory Store. */
+            if (conf.getBoolean("spark.smspark.enable", false)) {
+              (false, sharedStore)
+            } else {
+              (false, tachyonStore)
+            }
           } else if (putLevel.useDisk) {
             // Don't get back the bytes from put unless we replicate them
             (putLevel.replication > 1, diskStore)

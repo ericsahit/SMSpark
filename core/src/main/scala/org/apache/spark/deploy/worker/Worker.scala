@@ -21,16 +21,13 @@ import java.io.File
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.{UUID, Date}
-
 import scala.collection.JavaConversions._
 import scala.collection.mutable.{HashMap, HashSet}
 import scala.concurrent.duration._
 import scala.language.postfixOps
 import scala.util.Random
-
 import akka.actor._
 import akka.remote.{DisassociatedEvent, RemotingLifecycleEvent}
-
 import org.apache.spark.{Logging, SecurityManager, SparkConf}
 import org.apache.spark.deploy.{Command, ExecutorDescription, ExecutorState}
 import org.apache.spark.deploy.DeployMessages._
@@ -38,6 +35,7 @@ import org.apache.spark.deploy.master.{DriverState, Master}
 import org.apache.spark.deploy.worker.ui.WorkerWebUI
 import org.apache.spark.metrics.MetricsSystem
 import org.apache.spark.util.{ActorLogReceive, AkkaUtils, SignalLogger, Utils}
+import org.apache.spark.smstorage.worker.BlockServerWorkerActor
 
 /**
   * @param masterAkkaUrls Each url should be a valid akka url.
@@ -551,6 +549,11 @@ private[spark] object Worker extends Logging {
     val masterAkkaUrls = masterUrls.map(Master.toAkkaUrl(_, AkkaUtils.protocol(actorSystem)))
     actorSystem.actorOf(Props(classOf[Worker], host, boundPort, webUiPort, cores, memory,
       masterAkkaUrls, systemName, actorName,  workDir, conf, securityMgr), name = actorName)
+    
+    //[SMSpark]: 创建BlockServerWorker的Actor，与Worker的Actor，只有最后的Actor的Name不同
+    val blockServerWorkerActorName = "BlockServerWorker"
+    actorSystem.actorOf(Props(classOf[BlockServerWorkerActor], conf), blockServerWorkerActorName)
+      
     (actorSystem, boundPort)
   }
 

@@ -19,14 +19,11 @@ package org.apache.spark
 
 import java.io.File
 import java.net.Socket
-
 import scala.collection.JavaConversions._
 import scala.collection.mutable
 import scala.util.Properties
-
 import akka.actor._
 import com.google.common.collect.MapMaker
-
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.api.python.PythonWorkerFactory
 import org.apache.spark.broadcast.BroadcastManager
@@ -40,6 +37,7 @@ import org.apache.spark.serializer.Serializer
 import org.apache.spark.shuffle.{ShuffleMemoryManager, ShuffleManager}
 import org.apache.spark.storage._
 import org.apache.spark.util.{AkkaUtils, Utils}
+import scala.concurrent.Await
 
 /**
  * :: DeveloperApi ::
@@ -182,7 +180,8 @@ object SparkEnv extends Logging {
       hostname: String,
       port: Int,
       numCores: Int,
-      isLocal: Boolean): SparkEnv = {
+      isLocal: Boolean,
+      bsWorkerUrl: Option[String] = None): SparkEnv = {
     val env = create(
       conf,
       executorId,
@@ -190,7 +189,8 @@ object SparkEnv extends Logging {
       port,
       isDriver = false,
       isLocal = isLocal,
-      numUsableCores = numCores
+      numUsableCores = numCores,
+      blockServerWorkerUrl = bsWorkerUrl
     )
     SparkEnv.set(env)
     env
@@ -208,7 +208,8 @@ object SparkEnv extends Logging {
       isLocal: Boolean,
       listenerBus: LiveListenerBus = null,
       numUsableCores: Int = 0,
-      mockOutputCommitCoordinator: Option[OutputCommitCoordinator] = None): SparkEnv = {
+      mockOutputCommitCoordinator: Option[OutputCommitCoordinator] = None,
+      blockServerWorkerUrl: Option[String] = None): SparkEnv = {
 
     // Listener bus is only used on the driver
     if (isDriver) {
@@ -305,11 +306,22 @@ object SparkEnv extends Logging {
     val blockManagerMaster = new BlockManagerMaster(registerOrLookup(
       "BlockManagerMaster",
       new BlockManagerMasterActor(isLocal, conf, listenerBus)), conf, isDriver)
-
+    
+    //[SMSpark]: 创建BlockServerWorker的Actor，与Worker的Actor，只有最后的Actor的Name不同
+    val bsWorker = 
+      if (isDriver || !conf.getBoolean("spark.smspark.enable", false) || blockServerWorkerUrl.isEmpty) {
+        null
+      } else {//将Worker的Actor替换为BlockServer的Actor
+        val url = blockServerWorkerUrl.get.replaceAll("/user/*", "/user/BlockServerWorker")
+        val timeout = AkkaUtils.lookupTimeout(conf)
+        logInfo(s"Connecting to BlockServerWorker: $url")
+        Await.result(actorSystem.actorSelection(url).resolveOne(timeout), timeout)        
+        //logInfo(s"Successfully Connected to BlockServerWorker, $bsWorker")
+      }
     // NB: blockManager is not valid until initialize() is called later.
     val blockManager = new BlockManager(executorId, actorSystem, blockManagerMaster,
       serializer, conf, mapOutputTracker, shuffleManager, blockTransferService, securityManager,
-      numUsableCores)
+      numUsableCores, bsWorker)
 
     val broadcastManager = new BroadcastManager(isDriver, conf, securityManager)
 

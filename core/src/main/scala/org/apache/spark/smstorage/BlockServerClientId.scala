@@ -73,7 +73,7 @@ private[spark] class BlockServerClientId (
 
 private[spark] object BlockServerClientId {
   
-  def apply(execId: String, host: String, port: Int) {
+  def apply(execId: String, host: String, port: Int) = {
     get(new BlockServerClientId(execId, host, port))
   }
   
