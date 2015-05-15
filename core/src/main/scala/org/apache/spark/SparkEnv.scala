@@ -312,7 +312,7 @@ object SparkEnv extends Logging {
       if (isDriver || !conf.getBoolean("spark.smspark.enable", false) || blockServerWorkerUrl.isEmpty) {
         null
       } else {//将Worker的Actor替换为BlockServer的Actor
-        val url = blockServerWorkerUrl.get.replaceAll("/user/*", "/user/BlockServerWorker")
+        val url = blockServerWorkerUrl.get.replaceAll("/user/.*", "/user/BlockServerWorker")
         val timeout = AkkaUtils.lookupTimeout(conf)
         logInfo(s"Connecting to BlockServerWorker: $url")
         Await.result(actorSystem.actorSelection(url).resolveOne(timeout), timeout)        

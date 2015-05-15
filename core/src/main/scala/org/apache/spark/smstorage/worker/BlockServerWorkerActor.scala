@@ -59,6 +59,7 @@ class BlockServerWorkerActor(conf: SparkConf)
   val checkTimeoutInterval = conf.getLong("spark.storage.blockManagerTimeoutIntervalMs", 60000)
   
   override def preStart() {
+    logInfo("Starting Spark BlockServerWorker")
     import context.dispatcher
     //定期运行监测client是否失去链接
     timeoutCheckingTask = context.system.scheduler.schedule(
@@ -97,7 +98,7 @@ class BlockServerWorkerActor(conf: SparkConf)
       sender ! getBlock(blockId)
     
     case ExpireDeadClient =>
-      sender ! expirtDeadClient()
+      expirtDeadClient()
       
     case RemoveBlock(blockId) =>
       removeBlock(blockId)
@@ -245,6 +246,7 @@ class BlockServerWorkerActor(conf: SparkConf)
   /**
    * 检查最近没有心跳的client端，然后关闭它
    * 这里需要有个
+   * TODO
    */
   def expirtDeadClient() {
     logTrace("Checking for hosts with no recent heart beats in client")

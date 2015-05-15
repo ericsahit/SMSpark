@@ -17,7 +17,7 @@ private[spark] object BlockServerMessages {
   //////////////////////////////////////////////////////////////////////////////////
   sealed trait BlockServerWorkerToClient
   
-  case class ExpireDeadClient extends BlockServerWorkerToClient
+  case object ExpireDeadClient extends BlockServerWorkerToClient
   
   //////////////////////////////////////////////////////////////////////////////////
   // Messages from client to the worker.
