@@ -99,6 +99,7 @@ private[spark] class BlockManager(
   
   //[SMSpark]: TODO: 需要传入Worker的通信地址
   private[spark] var sharedStore: LocalMemoryStore = null;
+  private var shareMemoryInitialized = false
 
   private[spark]
   val externalShuffleServiceEnabled = conf.getBoolean("spark.shuffle.service.enabled", false)
@@ -215,14 +216,14 @@ private[spark] class BlockManager(
       registerWithExternalShuffleServer()
     }
     
-    /** [SMSPark]: init client and register to Block Server Worker. */
-    if (conf.getBoolean("spark.smspark.enable", false)) {
+    /** [SMSPark]: init client and register to Block Server Worker. Executor reg, Driver not */
+    if (conf.getBoolean("spark.smspark.enable", false) && bsWorker != null) {
       
       //TODO: 是否需要客户端的Actor？
 //      val slaveActor = actorSystem.actorOf(
 //        Props(new BlockManagerSlaveActor(this, mapOutputTracker)),
 //        name = "BlockServerClientActor" + BlockManager.ID_GENERATOR.next)
-      
+      shareMemoryInitialized = true
       val clientId = BlockServerClientId(executorId, blockTransferService.hostName, blockTransferService.port)
       val client = new BlockServerClient(clientId, bsWorker, conf)
       sharedStore = new LocalMemoryStore(this, maxMemory, client)
@@ -420,13 +421,28 @@ private[spark] class BlockManager(
           BlockStatus(StorageLevel.NONE, 0L, 0L, 0L)
         case level =>
           val inMem = level.useMemory && memoryStore.contains(blockId)
-          val inTachyon = level.useOffHeap && tachyonStore.contains(blockId)
+          val inTachyon = if (shareMemoryInitialized) {
+            level.useOffHeap && sharedStore.contains(blockId)
+          } else {
+            level.useOffHeap && tachyonStore.contains(blockId)
+          }
+          val tachyonSize = if (inTachyon) {
+            if (shareMemoryInitialized) {
+              sharedStore.getSize(blockId)
+            } else {
+              tachyonStore.getSize(blockId)
+            }
+          } else {
+            0L
+          }
+          //val inTachyon = level.useOffHeap && tachyonStore.contains(blockId)
+          //val tachyonSize = if (inTachyon) tachyonStore.getSize(blockId) else 0L
           val onDisk = level.useDisk && diskStore.contains(blockId)
           val deserialized = if (inMem) level.deserialized else false
           val replication = if (inMem || inTachyon || onDisk) level.replication else 1
           val storageLevel = StorageLevel(onDisk, inMem, inTachyon, deserialized, replication)
           val memSize = if (inMem) memoryStore.getSize(blockId) else 0L
-          val tachyonSize = if (inTachyon) tachyonStore.getSize(blockId) else 0L
+
           val diskSize = if (onDisk) diskStore.getSize(blockId) else 0L
           BlockStatus(storageLevel, memSize, diskSize, tachyonSize)
       }
@@ -515,10 +531,10 @@ private[spark] class BlockManager(
         // Look for the block in Tachyon
         if (level.useOffHeap) {
           
-          if (conf.getBoolean("spark.smspark.enable", false)) {
+          if (shareMemoryInitialized) {
             logDebug(s"Getting block $blockId from shared memory store")
             if (sharedStore.contains(blockId)) {
-              tachyonStore.getBytes(blockId) match {
+              sharedStore.getBytes(blockId) match {
                 case Some(bytes) =>
                   if (!asBlockResult) {
                     return Some(bytes)
@@ -811,7 +827,7 @@ private[spark] class BlockManager(
           } else if (putLevel.useOffHeap) {
             // Use tachyon for off-heap storage
             /** [SMSPark]: if enable, off-heap level use Shared Memory Store. */
-            if (conf.getBoolean("spark.smspark.enable", false)) {
+            if (shareMemoryInitialized) {
               (false, sharedStore)
             } else {
               (false, tachyonStore)
@@ -1139,7 +1155,12 @@ private[spark] class BlockManager(
         // Removals are idempotent in disk store and memory store. At worst, we get a warning.
         val removedFromMemory = memoryStore.remove(blockId)
         val removedFromDisk = diskStore.remove(blockId)
-        val removedFromTachyon = if (tachyonInitialized) tachyonStore.remove(blockId) else false
+        val removedFromTachyon = if (shareMemoryInitialized) {
+          sharedStore.remove(blockId)
+        } else {
+          if (tachyonInitialized) tachyonStore.remove(blockId) else false
+        }
+        //val removedFromTachyon = if (tachyonInitialized) tachyonStore.remove(blockId) else false
         if (!removedFromMemory && !removedFromDisk && !removedFromTachyon) {
           logWarning(s"Block $blockId could not be removed as it was not found in either " +
             "the disk, memory, or tachyon store")
@@ -1176,7 +1197,14 @@ private[spark] class BlockManager(
           val level = info.level
           if (level.useMemory) { memoryStore.remove(id) }
           if (level.useDisk) { diskStore.remove(id) }
-          if (level.useOffHeap) { tachyonStore.remove(id) }
+          if (level.useOffHeap) {
+            if (shareMemoryInitialized) {
+              sharedStore.remove(id)
+            } else {
+              tachyonStore.remove(id)
+            }
+          }
+          //if (level.useOffHeap) { tachyonStore.remove(id) }
           iterator.remove()
           logInfo(s"Dropped block $id")
         }
@@ -1256,9 +1284,14 @@ private[spark] class BlockManager(
     blockInfo.clear()
     memoryStore.clear()
     diskStore.clear()
-    if (tachyonInitialized) {
-      tachyonStore.clear()
+    if (shareMemoryInitialized) {
+      sharedStore.clear()
+    } else {
+      if (tachyonInitialized) {
+        tachyonStore.clear()
+      }
     }
+
     metadataCleaner.cancel()
     broadcastCleaner.cancel()
     logInfo("BlockManager stopped")

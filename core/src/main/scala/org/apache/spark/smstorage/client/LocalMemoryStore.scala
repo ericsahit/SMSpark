@@ -180,7 +180,7 @@ class LocalMemoryStore(
         
         //success=false有两种情况：1.服务器返回空间不足。2.写文件出错。对于第二种情况，需要对worker进行写结果，成功或失败
         //TODO：客户端如果有一个线程任务正在申请，则另一个线程应该等待写完
-        
+        logInfo(s"Write share memory $success, now writeBlockResult to BlockServerWorker")
         serverClient.writeBlockResult(entry.entryId, success) match {
           case Some(sblockId) =>//成功写入
             entries.put(sblockId, entry)

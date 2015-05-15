@@ -26,7 +26,7 @@ import org.apache.spark.storage.BlockId
 class SBlockId(
     val userDefinedId: String,
     val localBlockId: String = "",
-    val name: String = "") {
+    val name: String = "") extends Serializable {
   
   /**
    * shared memory entry string，作为唯一的id

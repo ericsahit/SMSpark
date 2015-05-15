@@ -104,7 +104,7 @@ class BlockServerWorkerSuite extends FunSuite with BeforeAndAfter {
     //assert(client.getBlockSize(sblockId))
     
     val userDefinedId = sblockId.userDefinedId;
-    assert(userDefinedId == "KMeansInput|"+i)
+    assert(userDefinedId == "KMeansInput|"+1)
 
     assert(client.reqNewBlock(userDefinedId, MB*20).isEmpty)
     
