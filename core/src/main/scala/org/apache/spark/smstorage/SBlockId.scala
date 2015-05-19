@@ -26,7 +26,7 @@ import org.apache.spark.storage.BlockId
 class SBlockId(
     val userDefinedId: String,
     val localBlockId: String = "",
-    val name: String = "") extends Serializable {
+    var name: String = "") extends Serializable {
   
   /**
    * shared memory entry string，作为唯一的id
@@ -47,14 +47,15 @@ class SBlockId(
    */
   //def rddDepId: Long
   
-  override def toString = if (userDefinedId.isEmpty()) name else userDefinedId
+  override def toString = s"$userDefinedId,$localBlockId,$name"
   override def hashCode = if (userDefinedId.isEmpty()) name.hashCode else userDefinedId.hashCode
   override def equals(other: Any): Boolean = other match {
     case o: SBlockId =>
       if (!userDefinedId.isEmpty()) {
         userDefinedId.equals(o.userDefinedId)
       } else {
-        name == o.name
+        name.equals(o.name) && localBlockId.equals(o.localBlockId)
+        //name == o.name
       }
   }
 }

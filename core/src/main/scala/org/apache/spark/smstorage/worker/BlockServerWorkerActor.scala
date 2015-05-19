@@ -75,6 +75,7 @@ class BlockServerWorkerActor(conf: SparkConf)
    * TODO：清理工作
    */
   override def postStop() {
+    logInfo("Clean shared memory space when worker closed")
     def clearEntry(entry: SBlockEntry) = spaceManager.releaseSpace(entry.entryId, entry.size.toInt)
     pendingEntries.values.foreach(clearEntry)
     blockIndexer.clear(clearEntry)
@@ -188,10 +189,11 @@ class BlockServerWorkerActor(conf: SparkConf)
         if (success) {
           assert(entry.entryId == entryId)
           val blockId = blockIndexer.addBlock(entryId, entry)
-          clientList.get(clientId).map { client =>//每个Client更新自己的持有Block信息
+          //每个Client更新自己的持有Block信息
+          clientList.get(clientId).map { client =>
             client.addBlock(blockId, entry)
           }
-          logInfo(s"ClientId: $clientId, entryid: $entryId, Write block result successfully")
+          logInfo(s"Block $blockId clientId: $clientId, entryid: $entryId, Write block result successfully")
           Some(blockId)
         } else {//客户端写结果失败
           spaceManager.releaseSpace(entryId, entry.size.toInt)
@@ -208,8 +210,8 @@ class BlockServerWorkerActor(conf: SparkConf)
   
   /**
    * 得到一个Block信息，返回一个BlockEntry
-   * TODO：在读取的时候，如果另一个应用程序删除怎么办？
-   * TODO首先先根据血统信息，来判断Block是否存在
+   * TODO: 在读取的时候，如果另一个应用程序删除怎么办？
+   * TODO: 首先先根据血统信息，来判断Block是否存在
    * 
    */
   def getBlock(blockId: SBlockId)= {

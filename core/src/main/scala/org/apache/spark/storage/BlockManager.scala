@@ -645,6 +645,31 @@ private[spark] class BlockManager(
 
   private def doGetRemote(blockId: BlockId, asBlockResult: Boolean): Option[Any] = {
     require(blockId != null, "BlockId is null")
+
+    //[SMSpark:] first find SharedMemoryStore for block if block is RDDBlock and userDefinedId is not null
+    blockId.asRDDId.map { rddBlockId =>
+      val userId = rddBlockId.userDefinedId
+      if (userId != null) {
+        if (sharedStore.contains(blockId)) {
+          sharedStore.getBytes(blockId) match {
+            case Some(bytes) =>
+              logInfo(s"Found block $blockId($userId) from Shared Memory Store by userDefinedId")
+              if (!asBlockResult) {
+                return Some(bytes)
+              } else {
+                //使用Disk来代表从Shared Memory Store读入;
+                //TODO: [SMSpark]: Need Add new DataReadMethod.SMemory
+                return Some(new BlockResult(
+                  dataDeserialize(blockId, bytes), DataReadMethod.Disk, bytes.limit()))
+              }
+
+            case None =>
+              logDebug(s"Block $blockId not found in shared memory store")
+          }
+        }
+      }
+    }
+
     val locations = Random.shuffle(master.getLocations(blockId))
     for (loc <- locations) {
       logDebug(s"Getting remote block $blockId from $loc")

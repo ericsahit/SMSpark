@@ -153,16 +153,18 @@ class LocalMemoryStore(
       returnValues: Boolean): PutResult = {
     // So that we do not modify the input offsets !
     // duplicate does not copy buffer, so inexpensive
+    val sid = SBlockId(blockId)
     val byteBuffer = bytes.duplicate()
     byteBuffer.rewind()
-    logDebug(s"Attempting to put block $blockId into SharedMemoryStore")
+    //TODO: Info to Debug
+    logInfo(s"Attempting to put block $sid into SharedMemoryStore")
     val startTime = System.currentTimeMillis
     //TODO: ****这里也需要做一定的抽象，将数据方便的放入到共享存储中，对上层提供一个清晰的API
     //先与worker通信，申请空间等工作，然后再写入
     //TODO: ****name怎么确定
     var os: LocalBlockOutputStream = null
     //TODO：访问worker节点，请求分配空间，这里应该传入唯一的共享id，userDefinedId（参见SBlockId的解释）
-    serverClient.reqNewBlock(blockId.name, byteBuffer.limit()) match {
+    serverClient.reqNewBlock(sid.userDefinedId, byteBuffer.limit()) match {
       case Some(entry) => 
         var success = true
         try {
@@ -172,7 +174,7 @@ class LocalMemoryStore(
           os.write(byteBuffer.array())
         } catch {
           case ioe: IOException =>
-            logWarning(s"Failed to write the block $blockId to SharedMemoryStore", ioe)
+            logWarning(s"Failed to write the block $sid to SharedMemoryStore", ioe)
             success = false
         } finally {
           os.close()
@@ -180,16 +182,19 @@ class LocalMemoryStore(
         
         //success=false有两种情况：1.服务器返回空间不足。2.写文件出错。对于第二种情况，需要对worker进行写结果，成功或失败
         //TODO：客户端如果有一个线程任务正在申请，则另一个线程应该等待写完
-        logInfo(s"Write share memory $success, now writeBlockResult to BlockServerWorker")
+        logInfo(s"Block $sid Write share memory $success, now writeBlockResult to BlockServerWorker")
         serverClient.writeBlockResult(entry.entryId, success) match {
-          case Some(sblockId) =>//成功写入
-            entries.put(sblockId, entry)
+          //成功写入, newSid: userDefinedId not empty, localBlockId empty, name not empty
+          case Some(newSid) =>
+            assert(sid.equals(newSid))
+            sid.name = newSid.name
+            entries.put(sid, entry)
           case None =>
-            logWarning(s"Cannot apply enough shared memory space for block $blockId")
+            logWarning(s"Cannot apply enough shared memory space for block $sid")
         }
-        
-      case None =>//如果不能申请到足够的空间
-        logWarning(s"Cannot apply enough shared memory space for block $blockId")
+      //如果不能申请到足够的空间
+      case None =>
+        logWarning(s"Cannot apply enough shared memory space for block $sid")
     }
     
     
@@ -198,7 +203,8 @@ class LocalMemoryStore(
 
     
     val finishTime = System.currentTimeMillis
-    logDebug("Block %s stored as %s file in SharedMemoryStore in %d ms".format(
+    //TODO: Info to Debug
+    logInfo("Block %s stored as %s file in SharedMemoryStore in %d ms".format(
       blockId, Utils.bytesToString(byteBuffer.limit), finishTime - startTime))
 
     if (returnValues) {
@@ -256,7 +262,7 @@ class LocalMemoryStore(
 
   override def getBytes(blockId: BlockId): Option[ByteBuffer] = {
     
-    val sid = SBlockId(blockId);
+    val sid = SBlockId(blockId)
     val entry = fetchBlockIfNotExist(sid)
     if (entry == null || entry.size <= 0) {
       logWarning(s"request block $sid from SharedMemoryStore doesn't have or no content")
