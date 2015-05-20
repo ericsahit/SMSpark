@@ -34,11 +34,12 @@ class BlockServerWorkerActor(conf: SparkConf)
   extends Actor with ActorLogReceive with Logging {
   
   val smManager: SMemoryManager = new SMemoryManager()
+  //初始内存，可以设定一个配置的值
   val spaceManager: SpaceManager = new SpaceManager(0, smManager)
   val blockIndexer: BlockIndexer = new BlockIndexer()  
   
   
-  private val clientList = new mutable.HashMap[BlockServerClientId, ClientInfo]
+  private val clientList = new mutable.HashMap[BlockServerClientId, BlockServerClientInfo]
   
   //保存Block列表
   private val blocks = new TimeStampedHashMap[SBlockId, SBlockEntry]
@@ -85,8 +86,8 @@ class BlockServerWorkerActor(conf: SparkConf)
   
   override def receiveWithLogging = {
     
-    case RegisterBlockServerClient(clientId, maxMemSize, clientActor) =>
-      registerClient(clientId, maxMemSize, clientActor)
+    case RegisterBlockServerClient(clientId, maxMemSize, jvmId, clientActor) =>
+      registerClient(clientId, maxMemSize, jvmId, clientActor)
       sender ! true
       
     case RequestNewBlock(clientId, name, size) =>
@@ -100,6 +101,9 @@ class BlockServerWorkerActor(conf: SparkConf)
     
     case ExpireDeadClient =>
       expirtDeadClient()
+      
+    case CheckExecutorMemory =>
+      checkExecutorMemory()
       
     case RemoveBlock(blockId) =>
       removeBlock(blockId)
@@ -120,16 +124,16 @@ class BlockServerWorkerActor(conf: SparkConf)
   /**
    * 注册客户端
    */
-  def registerClient(id: BlockServerClientId, maxMemSize: Long, clientActor: ActorRef) = {
+  def registerClient(id: BlockServerClientId, maxMemSize: Long, jvmId: Int, clientActor: ActorRef) = {
     if (!clientList.contains(id)) {
       
-      clientList(id) = new ClientInfo(id, System.currentTimeMillis(), maxMemSize, clientActor)
+      clientList(id) = new BlockServerClientInfo(id, System.currentTimeMillis(), maxMemSize, jvmId, clientActor)
       
       spaceManager.totalMemory += maxMemSize
       
       
-      logInfo("Registering block server client %s with %s RAM, %s".format(
-        id.hostPort, Utils.bytesToString(maxMemSize), id))
+      logInfo("Registering block server client %s with %s RAM, JVMID %d, %s".format(
+        id.hostPort, Utils.bytesToString(maxMemSize), jvmId, id))
       true  
     } else {
       false
@@ -253,60 +257,12 @@ class BlockServerWorkerActor(conf: SparkConf)
   def expirtDeadClient() {
     logTrace("Checking for hosts with no recent heart beats in client")
   }
-}
-
-/**
- * 每一个Executor的info，含有id，最大内存使用，client actor。
- * TODO: ****是否在其中保存Block信息？
- * 
- */
-private[spark] class ClientInfo(
-    val id: BlockServerClientId,
-    lastConnectTime: Long,
-    val maxMemSize: Long, 
-    val clientActor: ActorRef) extends Logging {
-  
-  private var _lastConnectTime = lastConnectTime
-  
-  var usedMemory = 0L
-  
-  private val _blocks = new JHashMap[SBlockId, SBlockEntry]
-  
-  def addBlock(id: SBlockId, entry: SBlockEntry) {
-    
-    if (!_blocks.containsKey(id)) {
-      _blocks.put(id, entry)
-      usedMemory += entry.size
-    }
-    
-    updateLastConnectTime()
-  }
-  
-  def removeBlock(id: SBlockId) {
-    val block = _blocks.get(id)
-    if (block != null) {
-      usedMemory -= block.size
-      _blocks.remove(id)
-    } else {
-      None
-    }
-  }
-  
-  def getBlock(blockId: SBlockId) = Option(_blocks.get(blockId))
-  
-  def updateLastConnectTime() {
-    _lastConnectTime = System.currentTimeMillis()
-  }
   
   /**
-   * 更新Block状态
+   * 检查每个Executor的JVM内存使用状况
    */
-  def updateBlockInfo(blockId: SBlockId) {
-    
-    updateLastConnectTime()
+  def checkExecutorMemory() {
     
   }
-  
-  
-  
 }
+

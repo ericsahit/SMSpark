@@ -19,6 +19,9 @@ private[spark] object BlockServerMessages {
   
   case object ExpireDeadClient extends BlockServerWorkerToClient
   
+  //检查Executor的内存
+  case object CheckExecutorMemory extends BlockServerWorkerToClient
+  
   //////////////////////////////////////////////////////////////////////////////////
   // Messages from client to the worker.
   //////////////////////////////////////////////////////////////////////////////////
@@ -27,7 +30,8 @@ private[spark] object BlockServerMessages {
   case class RegisterBlockServerClient(
       blockServerClientId: BlockServerClientId,
       maxMemorySize: Long,
-      sender: ActorRef) 
+      jvmId: Int,
+      clientActor: ActorRef) 
       extends BlockServerClientToWorker
   
   case class RemoveBlock(blockId: SBlockId) extends BlockServerClientToWorker

@@ -1780,6 +1780,16 @@ private[spark] object Utils extends Logging {
         threadInfo.getThreadState, stackTrace)
     }
   }
+  
+  def getJvmId(): Int = {
+    val pidStr = ManagementFactory.getRuntimeMXBean().getName()
+    val idx = pidStr.lastIndexOf("@")
+    if (idx == -1) {
+      -1
+    } else {
+      pidStr.substring(0, idx).toInt
+    }
+  }
 
   /**
    * Convert all spark properties set in the given SparkConf to a sequence of java options.

@@ -41,9 +41,9 @@ class BlockServerClient(val clientId: BlockServerClientId, var blockServerWorker
    * maxMemSize
    * 
    */
-  def registerClient(maxMemSize: Long, clientActor: ActorRef) {
+  def registerClient(maxMemSize: Long, jvmId: Int, clientActor: ActorRef) {
     logInfo("Trying to register BlockServerClient")
-    tell(RegisterBlockServerClient(clientId, maxMemSize, clientActor))
+    tell(RegisterBlockServerClient(clientId, maxMemSize, jvmId, clientActor))
     logInfo("Registered BlockServerClient")
   }
   

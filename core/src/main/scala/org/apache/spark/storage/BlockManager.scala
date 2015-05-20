@@ -224,10 +224,11 @@ private[spark] class BlockManager(
 //        Props(new BlockManagerSlaveActor(this, mapOutputTracker)),
 //        name = "BlockServerClientActor" + BlockManager.ID_GENERATOR.next)
       shareMemoryInitialized = true
+      val jvmId: Int = Utils.getJvmId()
       val clientId = BlockServerClientId(executorId, blockTransferService.hostName, blockTransferService.port)
       val client = new BlockServerClient(clientId, bsWorker, conf)
       sharedStore = new LocalMemoryStore(this, maxMemory, client)
-      client.registerClient(maxMemory, slaveActor)
+      client.registerClient(maxMemory, jvmId, slaveActor)
     }
   }
 
