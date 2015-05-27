@@ -36,7 +36,9 @@ class BlockServerWorkerActor(conf: SparkConf)
   val smManager: SMemoryManager = new SMemoryManager()
   //初始内存，可以设定一个配置的值
   val spaceManager: SpaceManager = new SpaceManager(0, smManager)
-  val blockIndexer: BlockIndexer = new BlockIndexer()  
+  val blockIndexer: BlockIndexer = new BlockIndexer()
+  
+  val executorWatcher: ExecutorWatcher = new ExecutorWatcher(spaceManager, blockIndexer)
   
   
   private val clientList = new mutable.HashMap[BlockServerClientId, BlockServerClientInfo]
@@ -53,11 +55,16 @@ class BlockServerWorkerActor(conf: SparkConf)
   
   private val pendingClients = new TimeStampedHashMap[String, BlockServerClientId]
   
+  private var isFirstExecutorConnected = false
+  
   var timeoutCheckingTask: Cancellable = null
+  var execWatchTask: Cancellable = null
   
   private val akkaTimeout = AkkaUtils.askTimeout(conf)
   
   val checkTimeoutInterval = conf.getLong("spark.storage.blockManagerTimeoutIntervalMs", 60000)
+  
+  val checkExecWatchInterval = conf.getLong("spark.smstorage.executorWatchIntervalMs", 2000)
   
   override def preStart() {
     logInfo("Starting Spark BlockServerWorker")
@@ -68,6 +75,13 @@ class BlockServerWorkerActor(conf: SparkConf)
         checkTimeoutInterval.seconds,
         self,
         ExpireDeadClient)
+        
+//   execWatchTask = context.system.scheduler.schedule(
+//       1.seconds,
+//       checkExecWatchInterval.seconds,
+//       self,
+//       CheckExecutorMemory
+//       )
     
     super.preStart()
   }
@@ -125,6 +139,18 @@ class BlockServerWorkerActor(conf: SparkConf)
    * 注册客户端
    */
   def registerClient(id: BlockServerClientId, maxMemSize: Long, jvmId: Int, clientActor: ActorRef) = {
+    
+    if (!isFirstExecutorConnected) {//当第一个Executor连接之后开启ExecutorWatch任务
+      isFirstExecutorConnected = true
+      import context._
+      execWatchTask = this.context.system.scheduler.schedule(
+         1.seconds,
+         checkExecWatchInterval.seconds,
+         this.self,
+         CheckExecutorMemory
+       )
+    }
+    
     if (!clientList.contains(id)) {
       
       clientList(id) = new BlockServerClientInfo(id, System.currentTimeMillis(), maxMemSize, jvmId, clientActor)
@@ -262,7 +288,7 @@ class BlockServerWorkerActor(conf: SparkConf)
    * 检查每个Executor的JVM内存使用状况
    */
   def checkExecutorMemory() {
-    
+    executorWatcher.check(clientList)
   }
 }
 
