@@ -72,3 +72,4 @@ sql/hive-thriftserver/test_warehouses
 
 # for smspark
 *.log
+
