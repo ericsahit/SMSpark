@@ -48,7 +48,7 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
   private val blocks = new TimeStampedHashMap[SBlockId, SBlockEntry]
   
   //保存Block位置，可能有多个Client。保存Block的位置可以表示有多少人在使用它
-  private val blockLocation = new mutable.HashMap[SBlockId, mutable.HashSet[BlockServerClientId]]
+  private val blockLocation = new JHashMap[SBlockId, mutable.HashSet[BlockServerClientId]]
   
   //保存被锁定的空间, entryId->SBlockEntry
   //TODO：需要过期清理
@@ -257,50 +257,80 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
    * TODO: 首先先根据血统信息，来判断Block是否存在
    * 
    */
-  def getBlock(blockId: SBlockId)= {
-    blockIndexer.getBlock(blockId)
+  def getBlock(blockId: SBlockId, clientId: BlockServerClientId)= {
     
-    //TODO: Master这里是否增加引用计数，或从Master查询是否在远程存在
-    //worker.sendMasterBSMessage(null)
+    val block = blockIndexer.getBlock(blockId)
+    if (block.isDefined) {
+      if (blockLocation.containsKey(blockId)) {
+        blockLocation.get(blockId).add(clientId)
+      } else {
+        val location = new mutable.HashSet[BlockServerClientId]
+        location.add(clientId)
+        blockLocation.put(blockId, location)
+      }
+      //TODO: Master这里是否增加引用计数，或从Master查询是否在远程存在
+      //worker.sendMasterBSMessage(null)
+    }
+    block
+
   }
   
   /**
    * 删除Block，分为两种情况，本地进行请求删除Block，远程进程请求删除Block，或者本地节点根据一定策略来进行删除
-   * TODO: 遍历blockLocation，查找client，通知进程删除？
+   * 
+   * 删除Block是某个App删除，不一定进行物理删除，因为还可能有其他程序正在使用
    * 
    */
-  def removeBlock(blockId: SBlockId) = {
+  def removeBlock(blockId: SBlockId, client: BlockServerClientId) = {
     
-    blockIndexer.removeBlock(blockId).map { entry =>
-      blockLocation.remove(blockId).map { locations =>
-        locations.foreach { clientId =>
-          clientList.get(clientId).map {client =>
-            client.removeBlock(blockId)
-            //通知本地的其他进程进程，删除Block
-            //TODO：通知协调者节点，或者其他的worker进程？
-            //client.clientActor.ask(RemoveBlock(blockId))(akkaTimeout)
-          }
+    blockLocation.get(blockId).map { locations =>
+      locations -= client
+      //如果不存在client使用此Block
+      if (locations.size == 0) {
+        
+        //从BlockIndexer中删除
+        blockIndexer.removeBlock(blockId).map { entry =>
+          
+          //通知SpaceManager删除，释放空间
+          spaceManager.releaseSpace(entry.entryId, entry.size.toInt)
+          
+          //TODO: 通知bsMaster发送删除Block信息，或者延迟一段时间再删除
+          worker.sendMasterBSMessage(RemoveBlock(worker.workerId, entry))
+        
         }
       }
-      spaceManager.releaseSpace(entry.entryId, entry.size.toInt)
-      
-      //TODO: Master发送删除Block信息，或者延迟一段时间再删除
-      //worker.sendMasterBSMessage(null)
+    
     }
   }
   
   /**
    * Executor关闭的时候调用
    * TODO：清除所有属于当前Client的Block吗？还是先保留一段时间，过一段时间再做删除操作。
-   * 当前做法：先加入到toRemove队列中，然后由每隔一段时间进行扫描，过一定时间则进行删除
+   * 当前做法：
+   * 先加入到toRemove队列中，然后由每隔一段时间进行扫描，过一定时间则进行删除
+   * 当前时间是否需要先把SpaceManager中的空间释放？
+   * 
    */
   def unregClient(clientId: BlockServerClientId) {
     clientList.remove(clientId) match {
       case Some(clientInfo) =>
-        
+        logInfo("Trying to remove BlockServerClientInfo " + clientId + " from BlockManagerWorker.")
+        removeClientBlock(clientInfo)
       case None =>
         logWarning(s"Try to unreg client $clientId, which does not exist.")
     }
+  }
+  
+  //TODO：需要判断Block是否被其他App正在使用，否则不能进行物理删除
+  def removeClientBlock(info: BlockServerClientInfo) {
+    
+    val iterator = info.blocks.keySet().iterator()
+    while (iterator.hasNext()) {
+      val blockId = iterator.next()
+      removeBlock(blockId)
+    }
+    
+    
   }
   
   def updateBlockStatus(clientId: BlockServerClientId, blockId: SBlockId) {

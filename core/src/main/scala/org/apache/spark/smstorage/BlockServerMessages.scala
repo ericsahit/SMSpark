@@ -22,7 +22,7 @@ private[spark] object BlockServerMessages {
   //新增Block
   case class AddBlock(workerId: String, blockEntry: SBlockEntry) extends BlockServerWorkerToMaster
   
-  //case class UpdateSMemory(workerId: String, memoryTotal: Long, memoryUsed: Long) extends BlockServerWorkerToMaster
+  case class RemoveBlock(workerId: String, blockEntry: SBlockEntry) extends BlockServerWorkerToMaster
   
   
   //////////////////////////////////////////////////////////////////////////////////

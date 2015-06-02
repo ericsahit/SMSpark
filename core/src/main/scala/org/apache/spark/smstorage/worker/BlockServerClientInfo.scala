@@ -30,6 +30,8 @@ private[spark] class BlockServerClientInfo(
   
   private val _blocks = new JHashMap[SBlockId, SBlockEntry]
   
+  def blocks = _blocks
+  
   //def isMemoryOverLimit = maxMemSize < 
   
   def addBlock(id: SBlockId, entry: SBlockEntry) {
