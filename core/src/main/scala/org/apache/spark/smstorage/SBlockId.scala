@@ -57,6 +57,7 @@ class SBlockId(
         name.equals(o.name) && localBlockId.equals(o.localBlockId)
         //name == o.name
       }
+
   }
 }
 

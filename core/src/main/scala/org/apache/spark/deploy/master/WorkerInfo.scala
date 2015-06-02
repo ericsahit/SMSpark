@@ -18,11 +18,14 @@
 package org.apache.spark.deploy.master
 
 import scala.collection.mutable
-
 import akka.actor.ActorRef
-
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.util.Utils
+import org.apache.spark.smstorage.SBlockId
+import org.apache.spark.smstorage.SBlockEntry
+import org.apache.spark.smstorage.SBlockEntry
+import org.apache.spark.smstorage.SBlockEntry
+import org.apache.spark.smstorage.SBlockEntry
 
 private[spark] class WorkerInfo(
     val id: String,
@@ -43,7 +46,16 @@ private[spark] class WorkerInfo(
   @transient var state: WorkerState.Value = _
   @transient var coresUsed: Int = _
   @transient var memoryUsed: Int = _
-
+  
+  /**
+   * [SMSpark]: 保存当前的BlockServerWorker节点上的Block信息
+   */
+  @transient var sblocks: mutable.HashMap[String, SBlockEntry] = _
+  //BlockWorker的总可用内存
+  @transient var smemoryTotal: Long = _
+  //BlockWorker的当前已使用内存
+  @transient var smemoryUsed: Long = _
+  
   @transient var lastHeartbeat: Long = _
 
   init()
@@ -63,6 +75,11 @@ private[spark] class WorkerInfo(
     coresUsed = 0
     memoryUsed = 0
     lastHeartbeat = System.currentTimeMillis()
+    
+    sblocks = new mutable.HashMap
+    smemoryTotal = 0L
+    smemoryUsed = 0L
+    
   }
 
   def hostPort: String = {
@@ -106,5 +123,57 @@ private[spark] class WorkerInfo(
 
   def setState(state: WorkerState.Value) = {
     this.state = state
+  }
+  
+  /**
+   * [SMSpark]: 更新内存使用情况，和BlockInfo
+   */
+  def updateBlockInfo(block: SBlockEntry) {
+    //this.smemoryUsed -= memoryUsed
+    
+    sblocks.get(block.userDefinedId) match {
+      case Some(entry) =>
+        
+      case None =>
+        
+    }
+    
+    //更新Block信息
+    sblocks.+= ((block.userDefinedId, block))
+      
+  }
+  
+  def updateSMemoryTotal(memoryTotal: Long) {
+     this.smemoryTotal = memoryTotal
+  }
+  
+  def addBlock(blockEntry: SBlockEntry) {
+    this.smemoryUsed += blockEntry.size
+    sblocks += ((blockEntry.userDefinedId, blockEntry))
+  }
+  
+  /**
+   * TODO：需要处理是否别的Worker仍然在使用它。****在BlockServerMaster中进行处理
+   * 
+   */
+  def removeBlock(blockUid: String) {
+    sblocks.get(blockId.userDefinedId) match {
+      case Some(blockEntry) =>
+        this.smemoryUsed -= blockEntry.size
+        
+      case None =>
+    }
+    
+  }
+  
+  /**
+   * [SMSpark]: 返回共享存储的内存使用比例
+   */
+  def smemoryUsePercent = {
+    if (smemoryTotal > 0) {
+      smemoryUsed / smemoryTotal
+    } else {
+      0.00
+    }
   }
 }

@@ -25,9 +25,23 @@ private[spark] class SBlockEntry (
   @transient var pending = false
   //最后一次访问时间
   @transient var lastReadTime = System.currentTimeMillis()
+  //Coordinator使用，当前有几个程序正在使用
+  @transient var usingWorkers = new scala.collection.mutable.HashSet[String]
   
   def updateReadTime() = {
     lastReadTime = System.currentTimeMillis()
+  }
+  
+  /**
+   * 更新BlockEntry，目前就是更新最后读取时间，以及更新引用的WorkerId
+   */
+  def update(workerId: String, newBlockEntry: SBlockEntry) {
+    updateReadTime()
+    usingWorkers += (workerId)
+  }
+  
+  def remove(workerId: String) = {
+    usingWorkers -= workerId
   }
   
 }

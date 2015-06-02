@@ -16,6 +16,7 @@ import akka.actor.{Actor, ActorRef, Cancellable}
 import akka.pattern.ask
 import org.apache.spark.util.{ActorLogReceive, AkkaUtils, Utils, TimeStampedHashMap}
 import org.apache.spark.smstorage.sharedmemory.SMemoryManager
+import org.apache.spark.deploy.worker.Worker
 
 /**
  * @author hwang
@@ -30,7 +31,7 @@ import org.apache.spark.smstorage.sharedmemory.SMemoryManager
  * TODO：各个组件的清理工作
  */
 private[spark]
-class BlockServerWorkerActor(conf: SparkConf)  
+class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
   extends Actor with ActorLogReceive with Logging {
   
   val smManager: SMemoryManager = new SMemoryManager()
@@ -94,6 +95,10 @@ class BlockServerWorkerActor(conf: SparkConf)
     def clearEntry(entry: SBlockEntry) = spaceManager.releaseSpace(entry.entryId, entry.size.toInt)
     pendingEntries.values.foreach(clearEntry)
     blockIndexer.clear(clearEntry)
+    
+    if (worker.connected) {
+      //worker.master ! 
+    }
   }
   
   
@@ -123,6 +128,8 @@ class BlockServerWorkerActor(conf: SparkConf)
       removeBlock(blockId)
       sender ! true
       
+    case UnregisterBlockServerClient(clientId) =>
+      unregClient(clientId)
      
 //    case UpdateBlockStatus(clientId, blockId) =>
 //      updateBlockStatus(clientId, blockId)
@@ -157,6 +164,8 @@ class BlockServerWorkerActor(conf: SparkConf)
       
       spaceManager.totalMemory += maxMemSize
       
+      //Master这里更新Total的存储内存信息
+      worker.sendMasterBSMessage(UpdateSMemory(worker.workerId, spaceManager.totalMemory, -1L))
       
       logInfo("Registering block server client %s with %s RAM, JVMID %d, %s".format(
         id.hostPort, Utils.bytesToString(maxMemSize), jvmId, id))
@@ -223,6 +232,10 @@ class BlockServerWorkerActor(conf: SparkConf)
           clientList.get(clientId).map { client =>
             client.addBlock(blockId, entry)
           }
+          
+          //Master这里发送AddBlock消息，userDefinedId作为唯一id
+          worker.sendMasterBSMessage(AddBlock(worker.workerId, entry))
+          
           logInfo(s"Block $blockId clientId: $clientId, entryid: $entryId, Write block result successfully")
           Some(blockId)
         } else {//客户端写结果失败
@@ -246,6 +259,9 @@ class BlockServerWorkerActor(conf: SparkConf)
    */
   def getBlock(blockId: SBlockId)= {
     blockIndexer.getBlock(blockId)
+    
+    //TODO: Master这里是否增加引用计数，或从Master查询是否在远程存在
+    //worker.sendMasterBSMessage(null)
   }
   
   /**
@@ -267,6 +283,23 @@ class BlockServerWorkerActor(conf: SparkConf)
         }
       }
       spaceManager.releaseSpace(entry.entryId, entry.size.toInt)
+      
+      //TODO: Master发送删除Block信息，或者延迟一段时间再删除
+      //worker.sendMasterBSMessage(null)
+    }
+  }
+  
+  /**
+   * Executor关闭的时候调用
+   * TODO：清除所有属于当前Client的Block吗？还是先保留一段时间，过一段时间再做删除操作。
+   * 当前做法：先加入到toRemove队列中，然后由每隔一段时间进行扫描，过一定时间则进行删除
+   */
+  def unregClient(clientId: BlockServerClientId) {
+    clientList.remove(clientId) match {
+      case Some(clientInfo) =>
+        
+      case None =>
+        logWarning(s"Try to unreg client $clientId, which does not exist.")
     }
   }
   

@@ -13,6 +13,19 @@ import akka.actor.ActorRef
 private[spark] object BlockServerMessages {
   
   //////////////////////////////////////////////////////////////////////////////////
+  // Messages from the worker to master.
+  //////////////////////////////////////////////////////////////////////////////////  
+  sealed trait BlockServerWorkerToMaster
+  
+  //更新当前Worker的使用内存
+  case class UpdateSMemory(workerId: String, memoryTotal: Long, memoryUsed: Long) extends BlockServerWorkerToMaster
+  //新增Block
+  case class AddBlock(workerId: String, blockEntry: SBlockEntry) extends BlockServerWorkerToMaster
+  
+  //case class UpdateSMemory(workerId: String, memoryTotal: Long, memoryUsed: Long) extends BlockServerWorkerToMaster
+  
+  
+  //////////////////////////////////////////////////////////////////////////////////
   // Messages from the worker to client.
   //////////////////////////////////////////////////////////////////////////////////
   sealed trait BlockServerWorkerToClient
@@ -37,6 +50,8 @@ private[spark] object BlockServerMessages {
   case class RemoveBlock(blockId: SBlockId) extends BlockServerClientToWorker
   
   case class RemoveExecutor(execId: String) extends BlockServerClientToWorker
+  
+  case class UnregisterBlockServerClient(blockServerClientId: BlockServerClientId) extends BlockServerClientToWorker
   
   case class GetBlockStatus(blockId: SBlockId) extends BlockServerClientToWorker
   

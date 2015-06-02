@@ -292,5 +292,12 @@ class LocalMemoryStore(
       is.close()
     }
   }
+  
+  /**
+   * 结束Executor时候的清理工作
+   */
+  override def clear() {
+    serverClient.unregisterClient()
+  }
 
 }

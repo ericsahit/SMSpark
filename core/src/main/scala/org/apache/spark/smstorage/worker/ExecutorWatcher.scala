@@ -61,6 +61,9 @@ private[spark] class ExecutorWatcher (
     
   }
   
+  /**
+   * 迁移或者替换Block
+   */
   private def doEvictBlock() {
     
   }

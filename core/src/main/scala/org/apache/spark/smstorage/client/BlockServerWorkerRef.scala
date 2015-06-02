@@ -31,7 +31,8 @@ class BlockServerClient(val clientId: BlockServerClientId, var blockServerWorker
    * TODO: ****传递什么样格式的消息
    */
   def removeExecutor(execId: String) {
-    tell(RemoveExecutor(execId))
+    //tell(RemoveExecutor(execId))
+    blockServerWorkerActor ! RemoveExecutor(execId)
     logInfo("Removed " + execId + " successfully in removeExecutor")
   }
   
@@ -45,6 +46,14 @@ class BlockServerClient(val clientId: BlockServerClientId, var blockServerWorker
     logInfo("Trying to register BlockServerClient")
     tell(RegisterBlockServerClient(clientId, maxMemSize, jvmId, clientActor))
     logInfo("Registered BlockServerClient")
+  }
+  
+  /**
+   * Executor(Client)关闭时候调用，不需要同步返回
+   */
+  def unregisterClient() {
+    blockServerWorkerActor ! UnregisterBlockServerClient(clientId)
+    logInfo("Unreg " + clientId + " successfully in UnregisterBlockServerClient")
   }
   
   /**

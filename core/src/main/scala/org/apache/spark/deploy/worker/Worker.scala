@@ -135,6 +135,9 @@ private[spark] class Worker(
 
   def coresFree: Int = cores - coresUsed
   def memoryFree: Int = memory - memoryUsed
+  
+  var bsWorkerActor: ActorRef = null
+  val coordinatorEnabled: Boolean = conf.getBoolean("spark.smspark.coorenabled", true)
 
   def createWorkDir() {
     workDir = Option(workDirPath).map(new File(_)).getOrElse(new File(sparkHome, "work"))
@@ -171,6 +174,17 @@ private[spark] class Worker(
     metricsSystem.start()
     // Attach the worker metrics servlet handler to the web ui after the metrics system is started.
     metricsSystem.getServletHandlers.foreach(webUi.attachHandler)
+    
+    //[SMSpark]: 创建BlockServerWorker actor的时机放到Worker的preStart方法中，这样允许BlockServerWorker Actor
+    //直接持有Worker的引用，直接复用和Master的通信
+    val blockServerWorkerActorName = "BlockServerWorker"
+    bsWorkerActor = context.system.actorOf(Props(classOf[BlockServerWorkerActor], conf, this), blockServerWorkerActorName)
+  }
+  
+  def sendMasterBSMessage(message: Any) {
+    if (coordinatorEnabled && connected) {
+      master ! message
+    }
   }
 
   def changeMaster(url: String, uiUrl: String) {
@@ -516,6 +530,9 @@ private[spark] class Worker(
     shuffleService.stop()
     webUi.stop()
     metricsSystem.stop()
+    
+    //[SMSpark]: 关闭BlockServerWorkerActor，没有测试正确性，此时actorSystem是否关闭
+    context.system.stop(bsWorkerActor)
   }
 }
 
@@ -551,8 +568,10 @@ private[spark] object Worker extends Logging {
       masterAkkaUrls, systemName, actorName,  workDir, conf, securityMgr), name = actorName)
     
     //[SMSpark]: 创建BlockServerWorker的Actor，与Worker的Actor，只有最后的Actor的Name不同
-    val blockServerWorkerActorName = "BlockServerWorker"
-    actorSystem.actorOf(Props(classOf[BlockServerWorkerActor], conf), blockServerWorkerActorName)
+    //[SMSpark]: 创建BlockServerWorker actor的时机放到Worker的preStart方法中，这样允许BlockServerWorker Actor
+    //直接持有Worker的引用，直接复用和Master的通信
+    //val blockServerWorkerActorName = "BlockServerWorker"
+    //actorSystem.actorOf(Props(classOf[BlockServerWorkerActor], conf), blockServerWorkerActorName)
       
     (actorSystem, boundPort)
   }
