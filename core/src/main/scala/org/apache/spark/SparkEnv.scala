@@ -175,6 +175,8 @@ object SparkEnv extends Logging {
   /**
    * Create a SparkEnv for an executor.
    * In coarse-grained mode, the executor provides an actor system that is already instantiated.
+   * 
+   * [SMSpark]: add WorkerUrl for find BlockServerWorker ActorRef
    */
   private[spark] def createExecutorEnv(
       conf: SparkConf,
@@ -182,7 +184,8 @@ object SparkEnv extends Logging {
       hostname: String,
       port: Int,
       numCores: Int,
-      isLocal: Boolean): SparkEnv = {
+      isLocal: Boolean,
+      workerUrl: Option[String] = None): SparkEnv = {
     val env = create(
       conf,
       executorId,
@@ -190,7 +193,8 @@ object SparkEnv extends Logging {
       port,
       isDriver = false,
       isLocal = isLocal,
-      numUsableCores = numCores
+      numUsableCores = numCores,
+      blockServerWorkerUrl = workerUrl 
     )
     SparkEnv.set(env)
     env
@@ -208,7 +212,8 @@ object SparkEnv extends Logging {
       isLocal: Boolean,
       listenerBus: LiveListenerBus = null,
       numUsableCores: Int = 0,
-      mockOutputCommitCoordinator: Option[OutputCommitCoordinator] = None): SparkEnv = {
+      mockOutputCommitCoordinator: Option[OutputCommitCoordinator] = None,
+      blockServerWorkerUrl: Option[String] = None): SparkEnv = {
 
     // Listener bus is only used on the driver
     if (isDriver) {
@@ -265,10 +270,10 @@ object SparkEnv extends Logging {
 
     //注册或者查找一个Actor，如果是Driver，则需要注册成一个Actor
     def registerOrLookup(name: String, newActor: => Actor): ActorRef = {
-      if (isDriver) {
+      if (isDriver) {//如果是Driver，则会创建
         logInfo("Registering " + name)
-        actorSystem.actorOf(Props(newActor), name = name)
-      } else {
+        actorSystem.actorOf(Props(newActor), name = name)//创建一个Actor
+      } else {//如果是Executor，则去Driver端查找name的actor，然后返回引用。例如："MapOutputTracker"，"BlockManagerMaster"，
         AkkaUtils.makeDriverRef(name, conf, actorSystem)
       }
     }

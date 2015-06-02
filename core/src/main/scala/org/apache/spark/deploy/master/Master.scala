@@ -225,6 +225,7 @@ private[spark] class Master(
       System.exit(0)
     }
 
+    
     case RegisterWorker(id, workerHost, workerPort, cores, memory, workerUiPort, publicAddress) =>
     {
       logInfo("Registering worker %s:%d with %d cores, %s RAM".format(

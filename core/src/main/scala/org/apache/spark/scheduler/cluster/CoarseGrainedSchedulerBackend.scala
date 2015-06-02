@@ -164,7 +164,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val actorSyste
     }
 
     // Make fake resource offers on all executors
-    def makeOffers() {
+    def makeOffers() {//每隔1s调度一次
       //Driver来给Executor分配任务，其中scheduler 就是 TaskSchedulerImpl
       //scheduler.resourceOffers()从从 FIFO 或者 Fair 调度器那里获得排序后的 TaskSetManager
       //并经过TaskSchedulerImpl.resourceOffer()，考虑 locality 等因素来确定 task 的全部信息 TaskDescription。

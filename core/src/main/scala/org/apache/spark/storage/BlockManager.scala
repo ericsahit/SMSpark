@@ -19,16 +19,13 @@ package org.apache.spark.storage
 
 import java.io.{BufferedOutputStream, ByteArrayOutputStream, File, InputStream, OutputStream}
 import java.nio.{ByteBuffer, MappedByteBuffer}
-
 import scala.collection.mutable.{ArrayBuffer, HashMap}
 import scala.concurrent.{Await, Future}
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.util.Random
-
 import akka.actor.{ActorSystem, Props}
 import sun.nio.ch.DirectBuffer
-
 import org.apache.spark._
 import org.apache.spark.executor._
 import org.apache.spark.io.CompressionCodec
@@ -41,6 +38,7 @@ import org.apache.spark.serializer.Serializer
 import org.apache.spark.shuffle.ShuffleManager
 import org.apache.spark.shuffle.hash.HashShuffleManager
 import org.apache.spark.util._
+import akka.actor.ActorRef
 
 private[spark] sealed trait BlockValues
 private[spark] case class ByteBufferValues(buffer: ByteBuffer) extends BlockValues
@@ -73,7 +71,8 @@ private[spark] class BlockManager(
     shuffleManager: ShuffleManager,
     blockTransferService: BlockTransferService,
     securityManager: SecurityManager,
-    numUsableCores: Int)
+    numUsableCores: Int,
+    bsWorker: ActorRef = null)
   extends BlockDataManager with Logging {
 
   //DiskBlockManager主要负责维护BlockId和物理文件之间的映射，TachyonBlockManager也同样是
@@ -509,7 +508,7 @@ private[spark] class BlockManager(
         }
 
         // Look for the block in Tachyon
-        if (level.useOffHeap) {
+        if (level.useOffHeap) {//SMSpark: 使用off heap级别作为共享存储，区别是还要管理
           logDebug(s"Getting block $blockId from tachyon")
           if (tachyonStore.contains(blockId)) {
             //****如果是RDD获取，则推迟获取数据到iterator.next()时候，减少一次内存的拷贝
@@ -817,9 +816,9 @@ private[spark] class BlockManager(
 
         // Actually put the values
         val result = data match {
-          case IteratorValues(iterator) =>
+          case IteratorValues(iterator) =>//对于RDD的存储，如果存储到Disk或者off-heap，不需要做展开操作，所以类型还是Iterator，此时还没有进行计算操作
             blockStore.putIterator(blockId, iterator, putLevel, returnValues)
-          case ArrayValues(array) =>//对于RDD的存储，因为CacheManager中做过展开操作，所以类型是Array
+          case ArrayValues(array) =>//对于RDD的存储，如果是存储到内存中，因为CacheManager中做过展开操作，所以类型是Array
             blockStore.putArray(blockId, array, putLevel, returnValues)
           case ByteBufferValues(bytes) =>
             bytes.rewind()
@@ -833,7 +832,7 @@ private[spark] class BlockManager(
         }
 
         // Keep track of which blocks are dropped from memory
-        if (putLevel.useMemory) {
+        if (putLevel.useMemory) {//TODO：[SMSpark]: 是否需要跟踪block的更新情况？
           result.droppedBlocks.foreach { updatedBlocks += _ }
         }
 

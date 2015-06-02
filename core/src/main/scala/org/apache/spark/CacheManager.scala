@@ -33,6 +33,7 @@ private[spark] class CacheManager(blockManager: BlockManager) extends Logging {
   private val loading = new mutable.HashSet[RDDBlockId]
 
   //当任务执行要获取RDD.iterator()时候，会触发存储机制。
+  //读写的流程都从这里入口。
   //1)如果RDD没有被Cache，那么执行rdd.computeOrReadCheckpoint，包装父RDD的迭代器，或者从检查点来读
   //2)如果这个RDD被缓存，那么先到BlockManager中去查找是否寻在：
   //	如果存在，则返回此block的迭代器；
@@ -74,7 +75,7 @@ private[spark] class CacheManager(blockManager: BlockManager) extends Logging {
             delegate.next()
           }
         }
-      case None =>//如果本地或远程都不存在Block
+      case None =>//如果本地或远程都不存在Block，进入写入流程
         // Acquire a lock for loading this partition
         // If another thread already holds the lock, wait for it to finish return its results
         val storedValues = acquireLockForPartition[T](key)//防止其他的线程正在创建此Block
@@ -164,10 +165,12 @@ private[spark] class CacheManager(blockManager: BlockManager) extends Logging {
       effectiveStorageLevel: Option[StorageLevel] = None): Iterator[T] = {
 
     val putLevel = effectiveStorageLevel.getOrElse(level)
-    if (!putLevel.useMemory) {
+    if (!putLevel.useMemory) {//如果不需要放入内存，则不需要内存的展开，直接存放
       /*
        * This RDD is not to be cached in memory, so we can just pass the computed values as an
        * iterator directly to the BlockManager rather than first fully unrolling it in memory.
+       * 
+       * [SMSpark]: 如果使用Tachyon级别，那么存储空间的管理还有效吗？
        */
       updatedBlocks ++=
         blockManager.putIterator(key, values, level, tellMaster = true, effectiveStorageLevel)

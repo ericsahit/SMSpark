@@ -104,7 +104,7 @@ private[spark] class MemoryStore(blockManager: BlockManager, maxMemory: Long)
       values: Array[Any],
       level: StorageLevel,
       returnValues: Boolean): PutResult = {
-    if (level.deserialized) {
+    if (level.deserialized) {//如果不需要序列化
       val sizeEstimate = SizeEstimator.estimate(values.asInstanceOf[AnyRef])
       val putAttempt = tryToPut(blockId, values, sizeEstimate, deserialized = true)
       PutResult(sizeEstimate, Left(values.iterator), putAttempt.droppedBlocks)
@@ -288,7 +288,7 @@ private[spark] class MemoryStore(blockManager: BlockManager, maxMemory: Long)
         if (elementsUnrolled % memoryCheckPeriod == 0) {
           // If our vector's size has exceeded the threshold, request more memory
           val currentSize = vector.estimateSize()
-          if (currentSize >= memoryThreshold) {
+          if (currentSize >= memoryThreshold) {//初始阈值是1MB，memoryGrowthFactor默认是1.5倍
             val amountToRequest = (currentSize * memoryGrowthFactor - memoryThreshold).toLong
             // Hold the accounting lock, in case another thread concurrently puts a block that
             // takes up the unrolling space we just ensured here

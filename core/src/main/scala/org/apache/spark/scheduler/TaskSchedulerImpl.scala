@@ -230,7 +230,7 @@ private[spark] class TaskSchedulerImpl(
     for (i <- 0 until shuffledOffers.size) {//遍历每一个可用的executor
       val execId = shuffledOffers(i).executorId
       val host = shuffledOffers(i).host
-      if (availableCpus(i) >= CPUS_PER_TASK) {//如果可用的cpu大于一个任务
+      if (availableCpus(i) >= CPUS_PER_TASK) {//如果可用的cpu大于一个任务所需要的cpu数量
         try {
           for (task <- taskSet.resourceOffer(execId, host, maxLocality)) {//具体的任务调度算法在resourceOffer方法中
             tasks(i) += task//可以调度到当前Executor的task列表
@@ -283,6 +283,7 @@ private[spark] class TaskSchedulerImpl(
     // Randomly shuffle offers to avoid always placing tasks on the same set of workers.
     val shuffledOffers = Random.shuffle(offers)//将worker洗牌，防止每次都将资源分配给前几个worker
     // Build a list of tasks to assign to each worker.
+    //调度到每个节点上的任务
     val tasks = shuffledOffers.map(o => new ArrayBuffer[TaskDescription](o.cores))
     val availableCpus = shuffledOffers.map(o => o.cores).toArray
     val sortedTaskSets = rootPool.getSortedTaskSetQueue

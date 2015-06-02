@@ -168,7 +168,7 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
         Props(classOf[CoarseGrainedExecutorBackend],
           driverUrl, executorId, sparkHostPort, cores, userClassPath, env),
         name = "Executor")
-      workerUrl.foreach { url =>
+      workerUrl.foreach { url =>//如果是Worker模式，则创建了一个WorkerWatcher，将Worker的Url传入
         env.actorSystem.actorOf(Props(classOf[WorkerWatcher], url), name = "WorkerWatcher")
       }
       env.actorSystem.awaitTermination()
@@ -204,6 +204,7 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
           argv = tail
         case ("--worker-url") :: value :: tail =>
           // Worker url is used in spark standalone mode to enforce fate-sharing with worker
+          //这里会传入Worker的akka Url
           workerUrl = Some(value)
           argv = tail
         case ("--user-class-path") :: value :: tail =>
