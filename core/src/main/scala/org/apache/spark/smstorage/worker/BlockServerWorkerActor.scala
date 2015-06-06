@@ -29,6 +29,19 @@ import org.apache.spark.deploy.worker.Worker
  * TODO: Worker节点向Client发送命令
  * TODO：SBlock的id匹配机制，根据RDD血统信息来进行匹配
  * TODO：各个组件的清理工作
+ * 
+ * 每一个操作现在都需要考虑下列组件：
+ * 1) blockIndexer 负责管理本节点的Block
+ * 2) clientList 负责管理客户端的列表，其中info中包含属于客户端的Block
+ * 3) blocks暂时弃用，使用BlockIndexer替代
+ * 4) blockLocation 保存使用block的客户端，get, remove, add, 
+ * 5) pendingEntries 保存正在写入的BlockEntry，写入开始和写入结束使用。需要定期清理
+ * 6) bsMaster 什么时候向bsMaster节点发送消息
+ * 
+ * add时候，向bsMaster发送ReqbsMasterAddBlock信息，异步
+ * add时候，会由调用者先调用get方法，查看bsMaster是否存在此节点。
+ * TODO: get时候，向bsMaster发送增加计数信息，异步
+ * 
  */
 private[spark]
 class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
@@ -54,7 +67,7 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
   //TODO：需要过期清理
   private val pendingEntries = new TimeStampedHashMap[Int, SBlockEntry]
   
-  private val pendingClients = new TimeStampedHashMap[String, BlockServerClientId]
+  //private val pendingClients = new TimeStampedHashMap[String, BlockServerClientId]
   
   private var isFirstExecutorConnected = false
   
@@ -91,7 +104,7 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
    * TODO：清理工作
    */
   override def postStop() {
-    logInfo("Clean shared memory space when worker closed")
+    logInfo("Clean shared memory space when worker closed.")
     def clearEntry(entry: SBlockEntry) = spaceManager.releaseSpace(entry.entryId, entry.size.toInt)
     pendingEntries.values.foreach(clearEntry)
     blockIndexer.clear(clearEntry)
@@ -108,6 +121,9 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
     case RegisterBlockServerClient(clientId, maxMemSize, jvmId, clientActor) =>
       registerClient(clientId, maxMemSize, jvmId, clientActor)
       sender ! true
+
+    case UnregisterBlockServerClient(clientId) =>
+      unregClient(clientId)
       
     case RequestNewBlock(clientId, name, size) =>
       sender ! reqNewBlock(clientId, name, size)
@@ -115,8 +131,8 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
     case WriteBlockResult(clientId, entryId, success) =>
       sender ! writeBlockResult(clientId, entryId, success)
     
-    case GetBlock(blockId) =>
-      sender ! getBlock(blockId)
+    case GetBlock(clientId, blockId) =>
+      sender ! getBlock(clientId, blockId)
     
     case ExpireDeadClient =>
       expirtDeadClient()
@@ -124,12 +140,9 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
     case CheckExecutorMemory =>
       checkExecutorMemory()
       
-    case RemoveBlock(blockId) =>
-      removeBlock(blockId)
+    case RemoveBlock(clientId, blockId) =>
+      removeBlock(clientId, blockId)
       sender ! true
-      
-    case UnregisterBlockServerClient(clientId) =>
-      unregClient(clientId)
      
 //    case UpdateBlockStatus(clientId, blockId) =>
 //      updateBlockStatus(clientId, blockId)
@@ -144,6 +157,9 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
   
   /**
    * 注册客户端
+   * 新增：
+   * 1）当第一个Executor连接之后开启ExecutorWatch任务
+   * 2）向bsMaster更新存储内存信息
    */
   def registerClient(id: BlockServerClientId, maxMemSize: Long, jvmId: Int, clientActor: ActorRef) = {
     
@@ -165,7 +181,7 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
       spaceManager.totalMemory += maxMemSize
       
       //Master这里更新Total的存储内存信息
-      worker.sendMasterBSMessage(UpdateSMemory(worker.workerId, spaceManager.totalMemory, -1L))
+      worker.sendMasterBSMessage(ReqbsMasterUpdateSMemory(worker.workerId, spaceManager.totalMemory, -1L))
       
       logInfo("Registering block server client %s with %s RAM, JVMID %d, %s".format(
         id.hostPort, Utils.bytesToString(maxMemSize), jvmId, id))
@@ -219,7 +235,8 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
   
   /**
    * 写Block结果，在客户端写共享存储成功或者失败后，发消息给worker
-   * 
+   * 新增：
+   * 向bsMaster更新Block信息
    */
   def writeBlockResult(clientId: BlockServerClientId, entryId: Int, success: Boolean) = {
     
@@ -234,7 +251,7 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
           }
           
           //Master这里发送AddBlock消息，userDefinedId作为唯一id
-          worker.sendMasterBSMessage(AddBlock(worker.workerId, entry))
+          worker.sendMasterBSMessage(ReqbsMasterAddBlock(worker.workerId, entry))
           
           logInfo(s"Block $blockId clientId: $clientId, entryid: $entryId, Write block result successfully")
           Some(blockId)
@@ -256,8 +273,9 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
    * TODO: 在读取的时候，如果另一个应用程序删除怎么办？
    * TODO: 首先先根据血统信息，来判断Block是否存在
    * 
+   * 记录BlockLocation信息
    */
-  def getBlock(blockId: SBlockId, clientId: BlockServerClientId)= {
+  def getBlock(clientId: BlockServerClientId, blockId: SBlockId)= {
     
     val block = blockIndexer.getBlock(blockId)
     if (block.isDefined) {
@@ -268,23 +286,30 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
         location.add(clientId)
         blockLocation.put(blockId, location)
       }
-      //TODO: Master这里是否增加引用计数，或从Master查询是否在远程存在
+      //TODO: Master这里是否增加引用计数
       //worker.sendMasterBSMessage(null)
+    } else {
+      //TODO: 本地不存在Block，是否到远程去查询，这里的是一个同步操作
+      //与bsMaster通信，速度会比较慢，所以需要有Worker缓存来抗。除非worker上不存在，这种情况在第一次都会存在。
+      //worker.sendMasterBSMessage(message)
     }
     block
 
   }
   
   /**
-   * 删除Block，分为两种情况，本地进行请求删除Block，远程进程请求删除Block，或者本地节点根据一定策略来进行删除
+   * 删除Block，分为两种情况: 
+   * 1) 本地进行请求删除Block
+   * 2) 远程进程请求删除Block，或者本地节点根据一定策略来进行删除
    * 
    * 删除Block是某个App删除，不一定进行物理删除，因为还可能有其他程序正在使用
    * 
    */
-  def removeBlock(blockId: SBlockId, client: BlockServerClientId) = {
+  def removeBlock( clientId: BlockServerClientId, blockId: SBlockId) = {
     
-    blockLocation.get(blockId).map { locations =>
-      locations -= client
+    val locations = blockLocation.get(blockId)
+    if (locations != null) {
+      locations -= clientId
       //如果不存在client使用此Block
       if (locations.size == 0) {
         
@@ -295,11 +320,16 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
           spaceManager.releaseSpace(entry.entryId, entry.size.toInt)
           
           //TODO: 通知bsMaster发送删除Block信息，或者延迟一段时间再删除
-          worker.sendMasterBSMessage(RemoveBlock(worker.workerId, entry))
+          //worker.sendMasterBSMessage(RemoveBlock(worker.workerId, entry))
         
         }
       }
-    
+      
+      //在clientInfo中去除Block的相关信息在JVM check时候有用
+      clientList.get(clientId).map { client => 
+        client.removeBlock(blockId)        
+      }
+      
     }
   }
   
@@ -308,29 +338,32 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
    * TODO：清除所有属于当前Client的Block吗？还是先保留一段时间，过一段时间再做删除操作。
    * 当前做法：
    * 先加入到toRemove队列中，然后由每隔一段时间进行扫描，过一定时间则进行删除
-   * 当前时间是否需要先把SpaceManager中的空间释放？
+   * 当前时间是否需要先把SpaceManager中的空间释放？不需要，因为物理空间没变。
    * 
    */
   def unregClient(clientId: BlockServerClientId) {
     clientList.remove(clientId) match {
       case Some(clientInfo) =>
         logInfo("Trying to remove BlockServerClientInfo " + clientId + " from BlockManagerWorker.")
-        removeClientBlock(clientInfo)
+        removeClientBlock(clientId, clientInfo)
       case None =>
         logWarning(s"Try to unreg client $clientId, which does not exist.")
     }
   }
   
-  //TODO：需要判断Block是否被其他App正在使用，否则不能进行物理删除
-  def removeClientBlock(info: BlockServerClientInfo) {
+  /**
+   * 删除Client所属的block
+   * TODO：需要判断Block是否被其他App正在使用，否则不能进行物理删除
+   * 更新：目前在removeBlock中进行实现
+   * 
+   */
+  private def removeClientBlock(clientId: BlockServerClientId, info: BlockServerClientInfo) {
     
     val iterator = info.blocks.keySet().iterator()
     while (iterator.hasNext()) {
       val blockId = iterator.next()
-      removeBlock(blockId)
+      removeBlock(clientId, blockId)
     }
-    
-    
   }
   
   def updateBlockStatus(clientId: BlockServerClientId, blockId: SBlockId) {

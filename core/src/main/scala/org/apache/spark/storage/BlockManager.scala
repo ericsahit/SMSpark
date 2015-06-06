@@ -540,7 +540,7 @@ private[spark] class BlockManager(
                   if (!asBlockResult) {
                     return Some(bytes)
                   } else {
-                    //使用Disk来代表从Shared Memory Store读入
+                    //TODO：暂时使用Disk来代表从Shared Memory Store读入，方便在UI中监控
                     return Some(new BlockResult(
                         dataDeserialize(blockId, bytes), DataReadMethod.Disk, info.size))
                   }

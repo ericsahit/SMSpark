@@ -39,10 +39,17 @@ import org.apache.spark.smstorage.client.io.LocalBlockOutputStream
  * 
  * TODO：
  * 1.对于不同类型的Block，是否应该采用不同的存取策略。
- * 2.现在只针对RDD block，对于Broadcast类型的block，一般大小比较小，仍旧存储到本地内存中，方便使用。
- * 3.所以存储Block时候，需要先判断是否是RDD类型的Block。
- * 4.进行存储的时候，先确定Block不存在
+ * 目前做法：通过修改存储级别来满足，Shared memory中只存储RDD类型的Block
  * 
+ * 2.现在只针对RDD block，对于Broadcast类型的block，一般大小比较小，仍旧存储到本地内存中，方便使用。
+ * 目前做法：其他类型的数据仍然使用本地内存
+ * 
+ * 3.所以存储Block时候，需要先判断是否是RDD类型的Block。
+ * 目前做法：可以满足
+ * 
+ * 4.进行存储的时候，先确定Block不存在
+ * 目前做法：这个是由外部调用流程实现，先看Block是否存在，不存在才会引起一个缓存的过程
+ * 读Block时候先调用了contains方法，如果contains存在，则调用getBytes方法返回数据
  * 
  */
 class LocalMemoryStore(
@@ -90,14 +97,15 @@ class LocalMemoryStore(
   
   /**
    * 如果本地Block映射不存在，则去worker节点进行查询。
-   * 查询不到几率很低，因为大多数block都是本Executor来进行注册的，本地列表中都存在。
+   * 查询不到的场合比较少，因为大多数block都是本Executor来进行注册的，本地列表中都存在缓存。
    * 改进并发访问效率
    */
   private def fetchBlockIfNotExist(blockId: SBlockId) = {
     var entry: SBlockEntry = null
     if (!entries.containsKey(blockId)) {
-      
+      logInfo("Local block not exist. fectch from Shared memory.")
       serverClient.getBlock(blockId).map { res =>
+        logInfo("Fectch block from Shared memory success, put it into local block data manager.")
         entry = res
         entries.put(blockId, entry)
       }
@@ -228,7 +236,7 @@ class LocalMemoryStore(
   }
 
   /**
-   * TODO：与BlockManager的功能相结合，是否getValues调用之前先调用contains方法？
+   * Resolved：与BlockManager的功能相结合，是否getValues调用之前先调用contains方法？
    */
   override def getValues(blockId: BlockId): Option[Iterator[Any]] = {
     val sid = SBlockId(blockId)

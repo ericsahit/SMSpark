@@ -18,12 +18,11 @@ private[spark] object BlockServerMessages {
   sealed trait BlockServerWorkerToMaster
   
   //更新当前Worker的使用内存
-  case class UpdateSMemory(workerId: String, memoryTotal: Long, memoryUsed: Long) extends BlockServerWorkerToMaster
+  case class ReqbsMasterUpdateSMemory(workerId: String, memoryTotal: Long, memoryUsed: Long) extends BlockServerWorkerToMaster
   //新增Block
-  case class AddBlock(workerId: String, blockEntry: SBlockEntry) extends BlockServerWorkerToMaster
-  
-  case class RemoveBlock(workerId: String, blockEntry: SBlockEntry) extends BlockServerWorkerToMaster
-  
+  case class ReqbsMasterAddBlock(workerId: String, blockEntry: SBlockEntry) extends BlockServerWorkerToMaster
+  //请求bsMaster删除一个Block
+  case class ReqbsMasterRemoveBlock(workerId: String, blockEntry: SBlockEntry) extends BlockServerWorkerToMaster
   
   //////////////////////////////////////////////////////////////////////////////////
   // Messages from the worker to client.
@@ -47,7 +46,7 @@ private[spark] object BlockServerMessages {
       clientActor: ActorRef) 
       extends BlockServerClientToWorker
   
-  case class RemoveBlock(blockId: SBlockId) extends BlockServerClientToWorker
+  case class RemoveBlock(clientId: BlockServerClientId, blockId: SBlockId) extends BlockServerClientToWorker
   
   case class RemoveExecutor(execId: String) extends BlockServerClientToWorker
   
@@ -62,7 +61,7 @@ private[spark] object BlockServerMessages {
   case class BlockContains(blockId: SBlockId, local: Boolean = true) extends BlockServerClientToWorker
   
   //读Block
-  case class GetBlock(blockId: SBlockId) extends BlockServerClientToWorker
+  case class GetBlock(clientId: BlockServerClientId, blockId: SBlockId) extends BlockServerClientToWorker
   
   //写Block
   case class RequestNewBlock(clientId: BlockServerClientId, userDefinedId: String, size: Long) extends BlockServerClientToWorker

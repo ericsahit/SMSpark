@@ -25,6 +25,8 @@ import java.nio.ByteBuffer
 import org.apache.spark.smstorage.client.io.LocalBlockInputStream
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import org.apache.spark.deploy.worker.Worker
+import org.apache.spark.util.Utils
 
 /**
  * @author hwang
@@ -70,10 +72,13 @@ class BlockServerWorkerSuite extends FunSuite with BeforeAndAfter {
     val (actorSystem, port) = AkkaUtils.createActorSystem("test", hostname, 0, conf, securityManager)
     this.actorSystem = actorSystem
     
-    worker = actorSystem.actorOf(Props(new BlockServerWorkerActor(conf)), "worker")
+    val deamonWorker: Worker = null
+    worker = actorSystem.actorOf(Props(new BlockServerWorkerActor(conf, deamonWorker)), "worker")
     val clientId: BlockServerClientId = new BlockServerClientId("test", "localhost", 9999)
     client = new BlockServerClient(clientId, worker, conf)
-    client.registerClient(20*MB, null)
+    val jvmId = Utils.getJvmId()
+    println(jvmId)
+    client.registerClient(20*MB, jvmId, null)
   }
   after {
     actorSystem.shutdown()

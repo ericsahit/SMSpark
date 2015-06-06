@@ -46,6 +46,7 @@ private[spark] class ExecutorWatcher (
       client.jvmMemory = jvmMemory
     }
     
+    logInfo(s"CurrentTotalMemory($currentTotalMemory), CurrentJvmMemory($jvmMemorySum), TotalMemory($totalMemory).")
     /**
      * 如果超出上限，则选举出一个节点，选举出一些Block进行置换，或者远程节点的迁移
      * 这里使用一定的策略，把需要的参数传进去，进行选举。类似于MemoryStore中Block的替换

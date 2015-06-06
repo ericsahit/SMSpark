@@ -74,7 +74,7 @@ class BlockServerClient(val clientId: BlockServerClientId, var blockServerWorker
    * 查看Block是否存在
    */
   def contains(blockId: SBlockId): Boolean = {
-    askBlockServerWithReply[Option[SBlockEntry]](GetBlock(blockId)).isDefined
+    askBlockServerWithReply[Option[SBlockEntry]](GetBlock(clientId, blockId)).isDefined
   }
   
   /**
@@ -82,7 +82,7 @@ class BlockServerClient(val clientId: BlockServerClientId, var blockServerWorker
    * TODO：askBlockServerWithReply超时了怎么办？
    */
   def getBlock(blockId: SBlockId): Option[SBlockEntry] = {
-      askBlockServerWithReply[Option[SBlockEntry]](GetBlock(blockId))
+      askBlockServerWithReply[Option[SBlockEntry]](GetBlock(clientId, blockId))
   }
   
   /**
@@ -106,7 +106,7 @@ class BlockServerClient(val clientId: BlockServerClientId, var blockServerWorker
    * 移除某一个Block
    */
   def removeBlock(blockId: SBlockId) = {
-    askBlockServerWithReply[Boolean](RemoveBlock(blockId))
+    askBlockServerWithReply[Boolean](RemoveBlock(clientId, blockId))
   }
   
   /**
