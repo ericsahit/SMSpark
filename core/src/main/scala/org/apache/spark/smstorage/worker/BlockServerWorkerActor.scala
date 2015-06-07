@@ -78,7 +78,7 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
   
   val checkTimeoutInterval = conf.getLong("spark.storage.blockManagerTimeoutIntervalMs", 60000)
   
-  val checkExecWatchInterval = conf.getLong("spark.smstorage.executorWatchIntervalMs", 2000)
+  val checkExecWatchInterval = conf.getLong("spark.smstorage.executorWatchIntervalMs", 5000)
   
   override def preStart() {
     logInfo("Starting Spark BlockServerWorker")
@@ -96,6 +96,12 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
 //       self,
 //       CheckExecutorMemory
 //       )
+    execWatchTask = this.context.system.scheduler.schedule(
+      5.seconds,
+      checkExecWatchInterval.seconds,
+      self,
+      CheckExecutorMemory
+    )
     
     super.preStart()
   }
@@ -165,13 +171,6 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
     
     if (!isFirstExecutorConnected) {//当第一个Executor连接之后开启ExecutorWatch任务
       isFirstExecutorConnected = true
-      import context._
-      execWatchTask = this.context.system.scheduler.schedule(
-         1.seconds,
-         checkExecWatchInterval.seconds,
-         this.self,
-         CheckExecutorMemory
-       )
     }
     
     if (!clientList.contains(id)) {
@@ -386,7 +385,7 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
    * 检查每个Executor的JVM内存使用状况
    */
   def checkExecutorMemory() {
-    if (clientList.size > 0)
+    if (isFirstExecutorConnected && clientList.size > 0)
       executorWatcher.check(clientList)
   }
 }

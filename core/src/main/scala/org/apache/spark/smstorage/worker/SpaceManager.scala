@@ -4,7 +4,7 @@
 package org.apache.spark.smstorage.worker
 
 import org.apache.spark.smstorage.SBlockEntry
-import org.apache.spark.util.TimeStampedHashSet
+import org.apache.spark.util.{Utils, TimeStampedHashSet}
 import org.apache.spark.Logging
 import org.apache.spark.smstorage.sharedmemory.SMemoryManager
 
@@ -34,7 +34,7 @@ private[spark] class SpaceManager(
    * TODO: 检查申请的kong
    */
   def checkSpace(reqMemSize: Int): Option[Int] = {
-    logInfo(s"ensureFreeSpace($reqMemSize) called with curMem=$usedMemory, maxMem=$totalMemory")
+    logInfo(s"ensureFreeSpace(${Utils.bytesToString(reqMemSize)}) called with curMem=${Utils.bytesToString(usedMemory)}, maxMem=${Utils.bytesToString(totalMemory)}")
     if (getAvailableMemory() <= reqMemSize) {
       logInfo(s"Will not store the block as it is larger than local memory limit")
       None

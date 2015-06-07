@@ -67,6 +67,7 @@ class BlockServerWorkerSuite extends FunSuite with BeforeAndAfter {
     
   }
   before {
+    println("******************before test.")
     val securityManager: SecurityManager = new SecurityManager(conf)
     val hostname = "localhost"
     val (actorSystem, port) = AkkaUtils.createActorSystem("test", hostname, 0, conf, securityManager)
@@ -81,6 +82,9 @@ class BlockServerWorkerSuite extends FunSuite with BeforeAndAfter {
     client.registerClient(20*MB, jvmId, null)
   }
   after {
+    println("******************after test.")
+    client.unregisterClient()
+
     actorSystem.shutdown()
     actorSystem.awaitTermination()
     actorSystem = null
