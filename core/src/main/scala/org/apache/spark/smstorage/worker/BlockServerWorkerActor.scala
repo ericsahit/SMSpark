@@ -181,7 +181,8 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
       spaceManager.totalMemory += maxMemSize
       
       //Master这里更新Total的存储内存信息
-      worker.sendMasterBSMessage(ReqbsMasterUpdateSMemory(worker.workerId, spaceManager.totalMemory, -1L))
+      if (worker != null)
+        worker.sendMasterBSMessage(ReqbsMasterUpdateSMemory(worker.workerId, spaceManager.totalMemory, -1L))
       
       logInfo("Registering block server client %s with %s RAM, JVMID %d, %s".format(
         id.hostPort, Utils.bytesToString(maxMemSize), jvmId, id))
@@ -251,7 +252,8 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
           }
           
           //Master这里发送AddBlock消息，userDefinedId作为唯一id
-          worker.sendMasterBSMessage(ReqbsMasterAddBlock(worker.workerId, entry))
+          if (worker != null)
+            worker.sendMasterBSMessage(ReqbsMasterAddBlock(worker.workerId, entry))
           
           logInfo(s"Block $blockId clientId: $clientId, entryid: $entryId, Write block result successfully")
           Some(blockId)
@@ -384,7 +386,8 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
    * 检查每个Executor的JVM内存使用状况
    */
   def checkExecutorMemory() {
-    executorWatcher.check(clientList)
+    if (clientList.size > 0)
+      executorWatcher.check(clientList)
   }
 }
 

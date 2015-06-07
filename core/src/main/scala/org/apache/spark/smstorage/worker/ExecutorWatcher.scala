@@ -3,6 +3,8 @@
  */
 package org.apache.spark.smstorage.worker
 
+import org.apache.spark.util.Utils
+
 import scala.collection.mutable
 import org.apache.spark.smstorage.BlockServerClientId
 import org.apache.spark.Logging
@@ -37,8 +39,7 @@ private[spark] class ExecutorWatcher (
     
     clients.values.foreach { client =>
       val jvmMemory = ProcfsBasedGetter.getProcessRss(client.jvmId)
-      val cid = client.id
-      logInfo(s"client $cid current JVM Memory: $jvmMemory")
+      logInfo(s"client ${client.id} current JVM Memory: ${Utils.bytesToString(jvmMemory)}")
 //      if ((currentTime - startTime) % 10000 == 0) {
 //      }
       //if (client.jvmMemory)
@@ -46,16 +47,16 @@ private[spark] class ExecutorWatcher (
       client.jvmMemory = jvmMemory
     }
     
-    logInfo(s"CurrentTotalMemory($currentTotalMemory), CurrentJvmMemory($jvmMemorySum), TotalMemory($totalMemory).")
     /**
-     * 如果超出上限，则选举出一个节点，选举出一些Block进行置换，或者远程节点的迁移
+      * 如果超出上限，则选举出一个节点，选举出一些Block进行置换，或者远程节点的迁移
      * 这里使用一定的策略，把需要的参数传进去，进行选举。类似于MemoryStore中Block的替换
      * 可以参考任务调度时候FIFO和FAIR的机制，机制和策略分离
      */
     val currentTotalMemory = jvmMemorySum + spaceManager.usedMemory
-    val totalMemory = spaceManager.totalMemory * safePercent
+    val totalMemory = (spaceManager.totalMemory * safePercent).toLong
+    logInfo(s"CurrentTotalMemory(${Utils.bytesToString(currentTotalMemory)}), CurrentJvmMemory(${Utils.bytesToString(jvmMemorySum)}), TotalMemory(${Utils.bytesToString(totalMemory)}).")
     if (currentTotalMemory >= totalMemory) {
-      logInfo(s"CurrentTotalMemory($currentTotalMemory), CurrentJvmMemory($jvmMemorySum) exceed TotalMemory($totalMemory) 90%, need action.")
+      logInfo(s"CurrentTotalMemory(${Utils.bytesToString(currentTotalMemory)}), CurrentJvmMemory(${Utils.bytesToString(jvmMemorySum)}), exceed TotalMemory(${Utils.bytesToString(totalMemory)}) 90%, need action.")
       //TODO: 替换Block
       doEvictBlock()
     }

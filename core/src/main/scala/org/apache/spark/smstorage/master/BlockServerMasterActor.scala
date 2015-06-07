@@ -27,7 +27,9 @@ class BlockServerMasterActor
    */
   private val blockWorkerInfo = new mutable.HashMap[String, String]()
   
-  
+  override def receiveWithLogging = {
+    null
+  }
   
   
   

@@ -157,7 +157,7 @@ private[spark] class WorkerInfo(
    * 
    */
   def removeBlock(blockUid: String) {
-    sblocks.get(blockId.userDefinedId) match {
+    sblocks.get(blockUid) match {
       case Some(blockEntry) =>
         this.smemoryUsed -= blockEntry.size
         
@@ -169,7 +169,7 @@ private[spark] class WorkerInfo(
   /**
    * [SMSpark]: 返回共享存储的内存使用比例
    */
-  def smemoryUsePercent = {
+  def smemoryUsePercent: Double = {
     if (smemoryTotal > 0) {
       smemoryUsed / smemoryTotal
     } else {
