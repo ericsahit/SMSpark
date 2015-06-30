@@ -53,6 +53,16 @@ object CurrentOrigin {
   }
 }
 
+/**
+ * 语法书中没一个节点都是一个TreeNode，每个TreeNode又含有若干个TreeNode类型，构成一棵树
+ * TreeNode有三种类型：
+ * BinaryNode，例如Join和Union
+ * UnaryNode，例如Project，Subquery，Filter，Limit等
+ * LeafNode，没有孩子节点的节点，例如Unresolved Relation，Command命令等
+ * 
+ * 核心方法：transform，接收一个PartialFunction，一般是Rule，然后将Rule迭代的使用到该节点的所有子节点上
+ * PartialFunction就是一个只对特殊的值进行处理的函数
+ */
 abstract class TreeNode[BaseType <: TreeNode[BaseType]] {
   self: BaseType with Product =>
 
@@ -183,14 +193,14 @@ abstract class TreeNode[BaseType <: TreeNode[BaseType]] {
    * @param rule the function used to transform this nodes children
    */
   def transformDown(rule: PartialFunction[BaseType, BaseType]): BaseType = {
-    val afterRule = CurrentOrigin.withOrigin(origin) {
+    val afterRule = CurrentOrigin.withOrigin(origin) {//先对本节点调用rule
       rule.applyOrElse(this, identity[BaseType])
     }
 
     // Check if unchanged and then possibly return old copy to avoid gc churn.
-    if (this fastEquals afterRule) {
+    if (this fastEquals afterRule) {//如果当前节点没有修改
       transformChildrenDown(rule)
-    } else {
+    } else {//如果当前节点进行过修改
       afterRule.transformChildrenDown(rule)
     }
   }
@@ -204,7 +214,7 @@ abstract class TreeNode[BaseType <: TreeNode[BaseType]] {
     var changed = false
     val newArgs = productIterator.map {
       case arg: TreeNode[_] if children contains arg =>
-        val newChild = arg.asInstanceOf[BaseType].transformDown(rule)
+        val newChild = arg.asInstanceOf[BaseType].transformDown(rule)//对左右子节点使用rule
         if (!(newChild fastEquals arg)) {
           changed = true
           newChild

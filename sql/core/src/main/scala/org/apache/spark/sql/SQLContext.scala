@@ -1058,6 +1058,11 @@ class SQLContext(@transient val sparkContext: SparkContext)
       sources.PreWriteCheck(catalog)
     )
   }
+  
+  /**
+   * QueryExecution接收parsesql(sqlString)生成的LogicalPlan
+   * 
+   */
 
   /**
    * :: DeveloperApi ::
@@ -1068,22 +1073,47 @@ class SQLContext(@transient val sparkContext: SparkContext)
   protected[sql] class QueryExecution(val logical: LogicalPlan) {
     def assertAnalyzed(): Unit = checkAnalysis(analyzed)
 
+    /**
+     * 1.2 
+     * 使用analyzer进行解析，将Unresolved Logical Plan变成Resolved Logical Plan
+     * 例如将*展开，Relation关系表解析，字段project解析等
+     */
     lazy val analyzed: LogicalPlan = analyzer(logical)
     lazy val withCachedData: LogicalPlan = {
       assertAnalyzed
       cacheManager.useCachedData(analyzed)
     }
+    
+    /**
+     * 1.3 
+     * 使用optimizer进行优化，将Resolved Logical Plan变成Optimized Logical Plan
+     * 例如合并limits Combine Limits，常量合并ConstantFolding，过滤下推Filter Pushdown
+     */
     lazy val optimizedPlan: LogicalPlan = optimizer(withCachedData)
 
+    /**
+     * 1.4  
+     * 使用SparkPlanner进行转换成物理查询计划，将Optimized Logical Plan变成Spark Plan
+     * 例如使用不同的Join类型，等
+     */
     // TODO: Don't just pick the first one...
     lazy val sparkPlan: SparkPlan = {
       SparkPlan.currentContext.set(self)
+      //planner是SparkPlanner类型
       planner(optimizedPlan).next()
     }
+    /**
+     * 1.4  
+     * 使用prepareForExecution函数将物理查询计划转换准备执行，将Spark Plan转换为Prepared Spark Plan
+     * 例如AddExchange，将关系表转换为Exchange，包含partition和shuffle
+     */
     // executedPlan should not be used to initialize any SparkPlan. It should be
     // only used for execution.
     lazy val executedPlan: SparkPlan = prepareForExecution(sparkPlan)
 
+    /**
+     * 1.5 toRDD方法触发真正执行
+     */
     /** Internal version of the RDD. Avoids copies and has no schema */
     lazy val toRdd: RDD[Row] = executedPlan.execute()
 

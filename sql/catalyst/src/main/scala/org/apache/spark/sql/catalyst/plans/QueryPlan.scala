@@ -21,6 +21,13 @@ import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSet, Expre
 import org.apache.spark.sql.catalyst.trees.TreeNode
 import org.apache.spark.sql.types.{ArrayType, DataType, StructField, StructType}
 
+/**
+ * 类继承关系：
+ * Expression->TreeNode
+ * LogicalPlan->QueryPlan->TreeNode
+ * 
+ */
+
 abstract class QueryPlan[PlanType <: TreeNode[PlanType]] extends TreeNode[PlanType] {
   self: PlanType with Product =>
 

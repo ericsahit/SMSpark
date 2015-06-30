@@ -26,6 +26,15 @@ import org.apache.spark.sql.catalyst.trees.TreeNode
 import org.apache.spark.sql.catalyst.trees
 
 
+/**
+ * 类继承关系：
+ * Expression->TreeNode
+ * LogicalPlan->QueryPlan->TreeNode
+ * LeafNode->LogicalPlan
+ * UnaryNode->LogicalPlan
+ * BinaryNode->LogicalPlan
+ */
+
 abstract class LogicalPlan extends QueryPlan[LogicalPlan] with Logging {
   self: Product =>
 
