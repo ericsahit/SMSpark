@@ -19,7 +19,7 @@ private[spark] class SpaceManager(
   
   var usedMemory: Long = 0L
   
-  //var totalMemory: Long = 0L
+  var totalExecutorMemory: Long = 0L
   
   var pendingMemory: Long = 0L
   
@@ -35,7 +35,7 @@ private[spark] class SpaceManager(
    */
   def checkSpace(reqMemSize: Int): Option[Int] = {
     logInfo(s"ensureFreeSpace(${Utils.bytesToString(reqMemSize)}) called with curMem=${Utils.bytesToString(usedMemory)}, maxMem=${Utils.bytesToString(totalMemory)}")
-    if (getAvailableMemory() <= reqMemSize) {
+    if (getAvailableMemory() < reqMemSize) {
       logInfo(s"Will not store the block as it is larger than local memory limit")
       None
     } else {

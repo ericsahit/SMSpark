@@ -46,7 +46,8 @@ public class ShmgetAccesser {
   /**
    * name的目录一定需要存在，否在会出现诡异问题
    */
-  private static final String SM_NAME = "/home/hadoop/develop/lib";
+  //private static final String SM_NAME = "/home/hadoop/develop/lib";
+  private static final String SM_NAME = "/data/hadoopspark";
   
   private static ShmgetAccesser instance;
   
@@ -60,7 +61,8 @@ public class ShmgetAccesser {
   
   static {//改动默认的PATH
     //System.setProperty("java.library.path", "/opt/lib");//动态链接库的目录
-    System.load("/home/hadoop/develop/lib/ShmgetAccesser.so");//访问共享内存的动态链接库
+      System.loadLibrary("ShmgetAccesser.so");
+    //System.load("/home/hadoop/develop/lib/ShmgetAccesser.so");//访问共享内存的动态链接库
   }
 
   private ShmgetAccesser(String type) {

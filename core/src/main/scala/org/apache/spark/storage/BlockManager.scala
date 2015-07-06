@@ -227,8 +227,9 @@ private[spark] class BlockManager(
       val jvmId: Int = Utils.getJvmId()
       val clientId = BlockServerClientId(executorId, blockTransferService.hostName, blockTransferService.port)
       val client = new BlockServerClient(clientId, bsWorker, conf)
-      sharedStore = new LocalMemoryStore(this, maxMemory, client)
-      client.registerClient(maxMemory, jvmId, slaveActor)
+      val maxSharedMemory = BlockManager.getMaxSharedMemory(conf)
+      sharedStore = new LocalMemoryStore(this, maxSharedMemory, client)
+      client.registerClient(Runtime.getRuntime.maxMemory, maxMemory, jvmId, slaveActor)
     }
   }
 
@@ -1333,6 +1334,16 @@ private[spark] object BlockManager extends Logging {
     val memoryFraction = conf.getDouble("spark.storage.memoryFraction", 0.6)
     val safetyFraction = conf.getDouble("spark.storage.safetyFraction", 0.9)
     (Runtime.getRuntime.maxMemory * memoryFraction * safetyFraction).toLong
+  }
+
+  /**
+   * [SMSpark]: get max shared memory for register executor client
+   * @param conf
+   * @return
+   */
+  private def getMaxSharedMemory(conf: SparkConf): Long = {
+    val memoryFraction = conf.getDouble("spark.storage.memoryFraction", 0.6)
+    (Runtime.getRuntime.maxMemory * memoryFraction).toLong
   }
 
   /**

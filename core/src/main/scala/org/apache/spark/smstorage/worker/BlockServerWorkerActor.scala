@@ -5,15 +5,14 @@ package org.apache.spark.smstorage.worker
 
 import java.util.{HashMap => JHashMap}
 import scala.collection.{mutable, immutable}
+import scala.collection.JavaConversions._
 import scala.concurrent.duration._
 import org.apache.spark.Logging
-import akka.actor.Cancellable
 import org.apache.spark.SparkConf
 import org.apache.spark.smstorage.BlockServerMessages._
 import org.apache.spark.smstorage.BlockServerClientId
 import org.apache.spark.smstorage._
 import akka.actor.{Actor, ActorRef, Cancellable}
-import akka.pattern.ask
 import org.apache.spark.util.{ActorLogReceive, AkkaUtils, Utils, TimeStampedHashMap}
 import org.apache.spark.smstorage.sharedmemory.SMemoryManager
 import org.apache.spark.deploy.worker.Worker
@@ -52,9 +51,8 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
   val spaceManager: SpaceManager = new SpaceManager(0, smManager)
   val blockIndexer: BlockIndexer = new BlockIndexer()
   
-  val executorWatcher: ExecutorWatcher = new ExecutorWatcher(spaceManager, blockIndexer)
-  
-  
+  val executorWatcher: ExecutorWatcher = new ExecutorWatcher(this, spaceManager, blockIndexer)
+
   private val clientList = new mutable.HashMap[BlockServerClientId, BlockServerClientInfo]
   
   //保存Block列表
@@ -86,23 +84,17 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
     //定期运行监测client是否失去链接
     timeoutCheckingTask = context.system.scheduler.schedule(
         0.seconds, 
-        checkTimeoutInterval.seconds,
+        checkTimeoutInterval.milliseconds,
         self,
         ExpireDeadClient)
         
 //   execWatchTask = context.system.scheduler.schedule(
 //       1.seconds,
-//       checkExecWatchInterval.seconds,
+//       checkExecWatchInterval.microseconds,
 //       self,
 //       CheckExecutorMemory
 //       )
-    execWatchTask = this.context.system.scheduler.schedule(
-      5.seconds,
-      checkExecWatchInterval.seconds,
-      self,
-      CheckExecutorMemory
-    )
-    
+
     super.preStart()
   }
   
@@ -115,7 +107,7 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
     pendingEntries.values.foreach(clearEntry)
     blockIndexer.clear(clearEntry)
     
-    if (worker.connected) {
+    if (worker != null && worker.connected) {
       //worker.master ! 
     }
   }
@@ -124,12 +116,13 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
   
   override def receiveWithLogging = {
     
-    case RegisterBlockServerClient(clientId, maxMemSize, jvmId, clientActor) =>
-      registerClient(clientId, maxMemSize, jvmId, clientActor)
+    case RegisterBlockServerClient(clientId, maxJvmMemSize, maxMemSize, jvmId, clientActor) =>
+      registerClient(clientId, maxJvmMemSize, maxMemSize, jvmId, clientActor)
       sender ! true
 
     case UnregisterBlockServerClient(clientId) =>
       unregClient(clientId)
+      sender ! true
       
     case RequestNewBlock(clientId, name, size) =>
       sender ! reqNewBlock(clientId, name, size)
@@ -167,24 +160,33 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
    * 1）当第一个Executor连接之后开启ExecutorWatch任务
    * 2）向bsMaster更新存储内存信息
    */
-  def registerClient(id: BlockServerClientId, maxMemSize: Long, jvmId: Int, clientActor: ActorRef) = {
+  def registerClient(id: BlockServerClientId, maxJvmMemSize: Long, maxMemSize: Long, jvmId: Int, clientActor: ActorRef) = {
     
     if (!isFirstExecutorConnected) {//当第一个Executor连接之后开启ExecutorWatch任务
       isFirstExecutorConnected = true
+
+      import context._
+      execWatchTask = this.context.system.scheduler.schedule(
+        1.seconds,
+        checkExecWatchInterval.milliseconds,
+        this.self,
+        CheckExecutorMemory
+      )
     }
     
     if (!clientList.contains(id)) {
       
-      clientList(id) = new BlockServerClientInfo(id, System.currentTimeMillis(), maxMemSize, jvmId, clientActor)
-      
+      clientList(id) = new BlockServerClientInfo(id, System.currentTimeMillis(), maxJvmMemSize, maxMemSize, jvmId, clientActor)
+
+      spaceManager.totalExecutorMemory += maxJvmMemSize
       spaceManager.totalMemory += maxMemSize
       
       //Master这里更新Total的存储内存信息
       if (worker != null)
         worker.sendMasterBSMessage(ReqbsMasterUpdateSMemory(worker.workerId, spaceManager.totalMemory, -1L))
       
-      logInfo("Registering block server client %s with %s RAM, JVMID %d, %s".format(
-        id.hostPort, Utils.bytesToString(maxMemSize), jvmId, id))
+      logInfo("Registering block server client %s with %s RAM, %s Max JVM RAM, JVMID %d, %s".format(
+        id.hostPort, Utils.bytesToString(maxMemSize), Utils.bytesToString(maxJvmMemSize), jvmId, id))
       true  
     } else {
       false
@@ -249,7 +251,15 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
           clientList.get(clientId).map { client =>
             client.addBlock(blockId, entry)
           }
-          
+
+          if (blockLocation.containsKey(blockId)) {
+            blockLocation.get(blockId).add(clientId)
+          } else {
+            val location = new mutable.HashSet[BlockServerClientId]
+            location.add(clientId)
+            blockLocation.put(blockId, location)
+          }
+
           //Master这里发送AddBlock消息，userDefinedId作为唯一id
           if (worker != null)
             worker.sendMasterBSMessage(ReqbsMasterAddBlock(worker.workerId, entry))
@@ -263,7 +273,7 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
         }
         
       case None => //查询不到pending的entry，已经过期被清除，返回失败
-        logWarning("Pending entry has been removed, write block failed")
+        logWarning(s"Pending entry $entryId has been removed, write block failed")
         None
     }
     
@@ -306,12 +316,14 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
    * 删除Block是某个App删除，不一定进行物理删除，因为还可能有其他程序正在使用
    * 
    */
-  def removeBlock( clientId: BlockServerClientId, blockId: SBlockId) = {
-    
+  def removeBlock(clientId: BlockServerClientId, blockId: SBlockId) = {
+    //logDebug(s"Remove block($blockId) from shared memory.")
     val locations = blockLocation.get(blockId)
+
     if (locations != null) {
       locations -= clientId
       //如果不存在client使用此Block
+      //logDebug(s"Remove block($blockId) from shared memory. location: ${locations.size}")
       if (locations.size == 0) {
         
         //从BlockIndexer中删除
@@ -319,7 +331,8 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
           
           //通知SpaceManager删除，释放空间
           spaceManager.releaseSpace(entry.entryId, entry.size.toInt)
-          
+          logInfo(s"Remove block($blockId) success from shared memory.")
+
           //TODO: 通知bsMaster发送删除Block信息，或者延迟一段时间再删除
           //worker.sendMasterBSMessage(RemoveBlock(worker.workerId, entry))
         
@@ -347,6 +360,10 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
       case Some(clientInfo) =>
         logInfo("Trying to remove BlockServerClientInfo " + clientId + " from BlockManagerWorker.")
         removeClientBlock(clientId, clientInfo)
+        logDebug("After remove BlockServerClientInfo " + clientId + " from BlockManagerWorker.")
+        spaceManager.totalExecutorMemory -= clientInfo.maxJvmMemSize
+        spaceManager.totalMemory -= clientInfo.maxMemSize
+
       case None =>
         logWarning(s"Try to unreg client $clientId, which does not exist.")
     }
@@ -359,7 +376,7 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
    * 
    */
   private def removeClientBlock(clientId: BlockServerClientId, info: BlockServerClientInfo) {
-    
+    //logDebug("RemoveClientBlock " + clientId + " from BlockManagerWorker.blocks number: " + info.blocks.size())
     val iterator = info.blocks.keySet().iterator()
     while (iterator.hasNext()) {
       val blockId = iterator.next()
@@ -385,7 +402,8 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
    * 检查每个Executor的JVM内存使用状况
    */
   def checkExecutorMemory() {
-    if (isFirstExecutorConnected && clientList.size > 0)
+    //logInfo("****checkExecutorMemory")
+    if (clientList.size > 0)
       executorWatcher.check(clientList)
   }
 }

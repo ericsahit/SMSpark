@@ -23,6 +23,7 @@ import scala.collection.mutable.ArrayBuffer
  * 
  */
 private[spark] class ExecutorWatcher (
+    bsWorker: BlockServerWorkerActor,
     spaceManager: SpaceManager,
     indexer: BlockIndexer,
     safePercent: Double = 0.9) extends Logging {
@@ -36,31 +37,44 @@ private[spark] class ExecutorWatcher (
     
     val currentTime: Long = System.currentTimeMillis()
     var jvmMemorySum: Long = 0L
-    
-    clients.values.foreach { client =>
+
+    clients.foreach { case (clientId, client) =>
       val jvmMemory = ProcfsBasedGetter.getProcessRss(client.jvmId)
-      logInfo(s"client ${client.id} current JVM Memory: ${Utils.bytesToString(jvmMemory)}")
-//      if ((currentTime - startTime) % 10000 == 0) {
-//      }
-      //if (client.jvmMemory)
-      jvmMemorySum += jvmMemory
-      client.jvmMemory = jvmMemory
+
+      if (jvmMemory >= 0) {
+
+        logInfo(s"Client ${clientId} current JVM Memory: ${Utils.bytesToString(jvmMemory)}")
+        //      if ((currentTime - startTime) % 10000 == 0) {
+        //      }
+        //if (client.jvmMemory)
+        jvmMemorySum += jvmMemory
+        client.jvmMemory = jvmMemory
+
+      } else {
+        // some case executor dead without unregister. So remove it from client list.
+        logWarning(s"Client ${clientId} may be dead for some reason. So remove it and its blocks.")
+        bsWorker.unregClient(clientId)
+      }
+
     }
-    
+
     /**
       * 如果超出上限，则选举出一个节点，选举出一些Block进行置换，或者远程节点的迁移
      * 这里使用一定的策略，把需要的参数传进去，进行选举。类似于MemoryStore中Block的替换
      * 可以参考任务调度时候FIFO和FAIR的机制，机制和策略分离
+     *
+     * currentTotalMemory = (computing memory sum) + (used Store Memory sum)
+     * spaceManager.totalExecutorMemory = every Executor Max Memory sum
      */
     val currentTotalMemory = jvmMemorySum + spaceManager.usedMemory
-    val totalMemory = (spaceManager.totalMemory * safePercent).toLong
+    val totalMemory = (spaceManager.totalExecutorMemory * safePercent).toLong
     logInfo(s"CurrentTotalMemory(${Utils.bytesToString(currentTotalMemory)}), CurrentJvmMemory(${Utils.bytesToString(jvmMemorySum)}), TotalMemory(${Utils.bytesToString(totalMemory)}).")
-    if (currentTotalMemory >= totalMemory) {
+    if (totalMemory > 0 && currentTotalMemory >= totalMemory) {
       logInfo(s"CurrentTotalMemory(${Utils.bytesToString(currentTotalMemory)}), CurrentJvmMemory(${Utils.bytesToString(jvmMemorySum)}), exceed TotalMemory(${Utils.bytesToString(totalMemory)}) 90%, need action.")
       //TODO: 替换Block
       doEvictBlock()
     }
-    
+
   }
   
   /**
@@ -69,7 +83,12 @@ private[spark] class ExecutorWatcher (
   private def doEvictBlock() {
     
   }
-  
+
+  /**
+   * unused check JVM Memory function
+   * @param jvmId
+   * @return
+   */
   private def checkJvmMemory(jvmId: Int): Long = {
     
     val rt = Runtime.getRuntime()

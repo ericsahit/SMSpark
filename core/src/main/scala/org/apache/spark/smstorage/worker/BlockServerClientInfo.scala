@@ -18,6 +18,7 @@ import org.apache.spark.smstorage.SBlockEntry
 private[spark] class BlockServerClientInfo(
     val id: BlockServerClientId,
     lastConnectTime: Long,
+    val maxJvmMemSize: Long,
     val maxMemSize: Long, 
     val jvmId: Int,
     val clientActor: ActorRef) extends Logging {

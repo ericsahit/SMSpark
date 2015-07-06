@@ -42,17 +42,18 @@ class BlockServerClient(val clientId: BlockServerClientId, var blockServerWorker
    * maxMemSize
    * 
    */
-  def registerClient(maxMemSize: Long, jvmId: Int, clientActor: ActorRef) {
+  def registerClient(maxJvmMemSize: Long, maxMemSize: Long, jvmId: Int, clientActor: ActorRef) {
     logInfo("Trying to register BlockServerClient")
-    tell(RegisterBlockServerClient(clientId, maxMemSize, jvmId, clientActor))
+    tell(RegisterBlockServerClient(clientId, maxJvmMemSize, maxMemSize, jvmId, clientActor))
     logInfo("Registered BlockServerClient")
   }
   
   /**
    * Executor(Client)关闭时候调用，不需要同步返回
+   * async will result in Exception because Executor shutdown before message return.
    */
   def unregisterClient() {
-    blockServerWorkerActor ! UnregisterBlockServerClient(clientId)
+    tell(UnregisterBlockServerClient(clientId))
     logInfo("Unreg " + clientId + " successfully in UnregisterBlockServerClient")
   }
   

@@ -223,16 +223,20 @@ class LocalMemoryStore(
   }
 
   override def remove(blockId: BlockId): Boolean = {
-    
-    val entry = entries.remove(SBlockId(blockId))
-    if (entry != null) {
-      logInfo(s"Block $blockId of size ${entry.size} dropped from memory")
-      serverClient.removeBlock(SBlockId(blockId))
-      true
-    } else {
+
+    if (!blockId.isRDD) {
       false
+    } else {
+      val entry = entries.remove(SBlockId(blockId))
+      if (entry != null) {
+        logInfo(s"Block $blockId of size ${entry.size} dropped from memory")
+        serverClient.removeBlock(SBlockId(blockId))
+        true
+      } else {
+        false
+      }
+
     }
-    
   }
 
   /**

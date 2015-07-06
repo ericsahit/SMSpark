@@ -79,16 +79,16 @@ class BlockServerWorkerSuite extends FunSuite with BeforeAndAfter {
     client = new BlockServerClient(clientId, worker, conf)
     val jvmId = Utils.getJvmId()
     println(jvmId)
-    client.registerClient(20*MB, jvmId, null)
+    client.registerClient(512*MB, 20*MB, jvmId, null)
   }
   after {
     println("******************after test.")
     client.unregisterClient()
 
-    actorSystem.shutdown()
+    //actorSystem.shutdown()
     actorSystem.awaitTermination()
-    actorSystem = null
-    worker = null
+    //actorSystem = null
+    //worker = null
   }
   
   test("test worker actor start") {
@@ -171,8 +171,83 @@ class BlockServerWorkerSuite extends FunSuite with BeforeAndAfter {
     val bs = is.readFully(entry2.size.toInt)
     is.close()
     SMStorageWriteTest.printByteArr(bs, 100)
-    SMStorageWriteTest.printByteArrLast(bs, 100)    
+    SMStorageWriteTest.printByteArrLast(bs, 100)
+
+    //TimeUnit.SECONDS.sleep(30)
     
+  }
+
+  test("test RDDBlock write without userDefinedId") {
+
+    val blockId = new RDDBlockId(2, 1)
+    val sblockId = SBlockId(blockId)
+
+    assert(client.getBlock(sblockId).isEmpty)
+    //assert(client.getBlockSize(sblockId))
+
+    val userDefinedId = sblockId.userDefinedId;
+    assert(userDefinedId == "rdd_2_1")
+
+    assert(client.reqNewBlock(userDefinedId, MB*21).isEmpty)
+
+    val size=2*MB
+    val res = client.reqNewBlock(userDefinedId, size)
+    assert(res.isDefined)
+
+    val entry=res.get
+
+    val byteArr = new Array[Byte](size)
+    var i=0
+    while (i<byteArr.length) {
+      byteArr(i)=123
+      i=i+1
+    }
+    byteArr(0)=122
+    byteArr(byteArr.length-1)=124
+
+    val byteBuffer=ByteBuffer.wrap(byteArr)
+
+    SMStorageWriteTest.printByteArr(byteArr, 100)
+    SMStorageWriteTest.printByteArrLast(byteArr, 100)
+
+    val os = LocalBlockOutputStream.getLocalOutputStream("shmget", entry.entryId, byteBuffer.limit())
+    os.write(byteBuffer.array())
+    os.close()
+
+    val newblockid = client.writeBlockResult(entry.entryId, true)
+    assert(newblockid.isDefined)
+    assert(newblockid.get.userDefinedId == sblockId.userDefinedId)
+
+    //这里测试写入Block之后再读取Block
+    //客户端的Block：userDefinedId=localBlockId="rdd_1_2", name=""
+    //而worker端服务器中的block：userDefinedId="rdd_1_2", name="1474577", localBlockId=""
+    //需要修改匹配策略，否则两者的Block匹配不到
+    val writeBlockId = newblockid.get
+    val getEntry = client.getBlock(writeBlockId)
+
+    assert(getEntry.isDefined)
+    assert(getEntry.get.entryId == entry.entryId)
+    assert(getEntry.get.local==true)
+    assert(getEntry.get.size==size)
+
+
+    val entry2 = client.getBlock(writeBlockId).get
+    println(entry2.entryId)
+
+    var is: LocalBlockInputStream = null
+    if (entry2.local) {
+      is = LocalBlockInputStream.getLocalInputStream("shmget", entry2.entryId, entry2.size.toInt)
+    } else {//远程Block
+      //is =
+    }
+    assert(is != null)
+    val bs = is.readFully(entry2.size.toInt)
+    is.close()
+    SMStorageWriteTest.printByteArr(bs, 100)
+    SMStorageWriteTest.printByteArrLast(bs, 100)
+
+    //TimeUnit.SECONDS.sleep(30)
+
   }
   
   test("test worker concurrent write read block") {

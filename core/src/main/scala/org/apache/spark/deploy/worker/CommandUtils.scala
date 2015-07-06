@@ -97,7 +97,9 @@ object CommandUtils extends Logging {
    * the way the JAVA_OPTS are assembled there.
    */
   private def buildJavaOpts(command: Command, memory: Int, sparkHome: String): Seq[String] = {
-    val memoryOpts = Seq(s"-Xms${memory}M", s"-Xmx${memory}M")
+    //[SMSpark]: modify Xms to Xmx/2, so control the memory usage
+    val xmsMemory: Int = memory / 2;
+    val memoryOpts = Seq(s"-Xms${xmsMemory}M", s"-Xmx${memory}M")
 
     // Exists for backwards compatibility with older Spark versions
     val workerLocalOpts = Option(getenv("SPARK_JAVA_OPTS")).map(Utils.splitCommandString)

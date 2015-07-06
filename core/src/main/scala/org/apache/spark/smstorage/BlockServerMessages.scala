@@ -41,6 +41,7 @@ private[spark] object BlockServerMessages {
   
   case class RegisterBlockServerClient(
       blockServerClientId: BlockServerClientId,
+      maxJvmMemSize: Long,
       maxMemorySize: Long,
       jvmId: Int,
       clientActor: ActorRef) 
