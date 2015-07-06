@@ -29,6 +29,16 @@ import org.apache.spark.sql.sources.{CreateTableUsing, CreateTempTableUsing, Des
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{SQLContext, Strategy, execution}
 
+/**
+ * HashJoin，用于内连接，包含BroadcastHashJoin和ShuffledHashJoin
+ * BroadcastHashJoin：
+ * 如果其中一张表小于autoBroadcastJoinThreshold（默认为10MB），
+ * 则将此表广播道各个节点，直接做join。相当于Hive中的map join。
+ * ShuffledHashJoin：默认的join方式，两张表通过shuffle，在reduce端做join操作
+ * 
+ * BroadcastNestedLoopJoin：用于外链接，Left Outer Join， RightOuter， FullOuter
+ * 
+ */
 private[sql] abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
   self: SQLContext#SparkPlanner =>
 
@@ -81,6 +91,7 @@ private[sql] abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
 
     def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
       case ExtractEquiJoinKeys(Inner, leftKeys, rightKeys, condition, left, right)
+      //如果表大小小于autoBroadcastJoinThreshold（默认为10MB），则做BroadcastHashJoin
         if sqlContext.conf.autoBroadcastJoinThreshold > 0 &&
            right.statistics.sizeInBytes <= sqlContext.conf.autoBroadcastJoinThreshold =>
         makeBroadcastHashJoin(leftKeys, rightKeys, left, right, condition, joins.BuildRight)

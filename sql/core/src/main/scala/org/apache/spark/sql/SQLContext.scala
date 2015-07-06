@@ -1095,6 +1095,13 @@ class SQLContext(@transient val sparkContext: SparkContext)
      * 1.4  
      * 使用SparkPlanner进行转换成物理查询计划，将Optimized Logical Plan变成Spark Plan
      * 例如使用不同的Join类型，等
+     * SparkPlanner(spark)->SparkStrategies(spark)->QueryPlanner[SparkPlan](catalyst)
+     * SparkStrategies包含一系列的QueryPlanner.Strategy，接收Logical Plan，生成一系列的Physical Plan
+     * 
+     * SparkPlan->QueryPlan[SparkPlan](catalyst)->TreeNode
+     * UnaryNode->SparkPlan：Aggregate，Exchange，Generate等
+     * BinaryPNode->SparkPlan：LeftSemiJoinHash，BroadcastHashJoin，ShuffledHashJoin等
+     * LeafNode->SparkPlan：
      */
     // TODO: Don't just pick the first one...
     lazy val sparkPlan: SparkPlan = {

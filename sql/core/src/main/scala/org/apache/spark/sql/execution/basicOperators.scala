@@ -113,7 +113,7 @@ case class Limit(limit: Int, child: SparkPlan)
         iter.take(limit).map(row => mutablePair.update(false, row))
       }
     }
-    val part = new HashPartitioner(1)
+    val part = new HashPartitioner(1)//最后通过shuffle合并到一个partition内部，然后进行一次limit
     val shuffled = new ShuffledRDD[Boolean, Row, Row](rdd, part)
     shuffled.setSerializer(new SparkSqlSerializer(new SparkConf(false)))
     shuffled.mapPartitions(_.take(limit).map(_._2))

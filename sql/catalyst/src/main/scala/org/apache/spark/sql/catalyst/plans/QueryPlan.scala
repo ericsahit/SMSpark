@@ -26,6 +26,11 @@ import org.apache.spark.sql.types.{ArrayType, DataType, StructField, StructType}
  * Expression->TreeNode
  * LogicalPlan->QueryPlan->TreeNode
  * 
+     * SparkPlanner(spark)->SparkStrategies(spark)->QueryPlanner[SparkPlan](catalyst)
+     * SparkPlan->QueryPlan[SparkPlan](catalyst)->TreeNode
+     * UnaryNode->SparkPlan：Aggregate，Exchange，Generate等
+     * BinaryPNode->SparkPlan：LeftSemiJoinHash，BroadcastHashJoin，ShuffledHashJoin等
+     * LeafNode->SparkPlan：
  */
 
 abstract class QueryPlan[PlanType <: TreeNode[PlanType]] extends TreeNode[PlanType] {
