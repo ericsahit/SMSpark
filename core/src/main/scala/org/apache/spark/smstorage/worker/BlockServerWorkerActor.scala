@@ -49,7 +49,9 @@ import org.apache.spark.deploy.worker.Worker
  * 那么，需要保证节点上总存储内存的使用不超过节点存储资源的一定比例，例如memoryCapacity * memoryFraction * saftPoint
  * 
  * 2.元数据管理：
- * 增加相应的元数据管理机制，存储数据替换和多节点的迁移策略所需要的关键信息
+ * 增加相应的元数据管理机制，存储数据替换和多节点的迁移策略所需要的关键信息。
+ * 1）数据替换代价
+ * 2）迁移目标节点
  * 
  * ****先不保证计算内存的最大使用？先保证计算内存的初始使用值。那么对于负载，需要使用特定的值。
  */
@@ -92,6 +94,14 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
   val checkTimeoutInterval = conf.getLong("spark.storage.blockManagerTimeoutIntervalMs", 60000)
   
   val checkExecWatchInterval = conf.getLong("spark.smstorage.executorWatchIntervalMs", 5000)
+  
+  //////////////////////////////////////////////////////////////////////////////////
+  // 统计本节点的一些使用信息
+  //////////////////////////////////////////////////////////////////////////////////  
+  /**
+   * 统计历史访问过数据块的应用Executor个数
+   */
+  var appTotalCount: Int = 0
   
   override def preStart() {
     logInfo("Starting Spark BlockServerWorker")

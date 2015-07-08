@@ -20,7 +20,7 @@ private[spark] class SpaceManager(
   var usedMemory: Long = 0L
   
   /**
-   * 节点当前Executor JVM合计的最大内存
+   * 节点当前所有Executor的JVM合计的最大内存
    */
   var totalExecutorMemory: Long = 0L
   

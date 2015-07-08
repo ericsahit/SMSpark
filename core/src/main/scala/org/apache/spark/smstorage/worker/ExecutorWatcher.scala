@@ -35,6 +35,9 @@ private[spark] class ExecutorWatcher (
    * 检查每一个Executor的JVM使用内存
    * 这里检查了使用的RSS内存，并没有检查JVM内堆内存的使用情况，Young Gen等
    * TODO: 进行调整的时候可以根据JVM内部的使用情况
+   * 
+   * v1:
+   * 监控当前节点存储内存资源每隔一段时间的资源使用情况，然后发送给master节点
    */
   def check(clients: mutable.HashMap[BlockServerClientId, BlockServerClientInfo]) {
     
