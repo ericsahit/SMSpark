@@ -13,7 +13,7 @@ import org.apache.spark.smstorage.SBlockEntry
 /**
  * 每一个Executor的info，含有id，最大内存使用，client actor。
  * TODO: ****是否在其中保存Block信息？
- * 
+ * maxJvmMemSize: Executor的JVM可以达到的最大内存
  */
 private[spark] class BlockServerClientInfo(
     val id: BlockServerClientId,

@@ -14,7 +14,7 @@ import org.apache.spark.smstorage.SBlockEntry
 /**
  * @author hwang
  *
- * 还需要保存没个client下，Storage的使用情况
+ * v1: 还需要保存每个client下，Storage的使用情况
  *
  */
 private[spark] class BlockIndexer {

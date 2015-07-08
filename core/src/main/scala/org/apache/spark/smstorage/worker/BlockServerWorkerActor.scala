@@ -41,14 +41,29 @@ import org.apache.spark.deploy.worker.Worker
  * add时候，会由调用者先调用get方法，查看bsMaster是否存在此节点。
  * TODO: get时候，向bsMaster发送增加计数信息，异步
  * 
+ * update 2015.07.08 v1版本：
+ * 1.分配存储内存空间修改为，把当前节点的可用存储内存都设置为共享的存储空间。
+ * 将存储内存与调度分离，这样每调度一个应用程序Executor，实际上只调度计算内存。
+ * 但是上层调度不修改，对调度仍然透明。
+ * 例如调度一个1GB的应用程序，实际只使用了400MB的计算内存，600MB的存储内存已经预先在节点进行分配了。
+ * 那么，需要保证节点上总存储内存的使用不超过节点存储资源的一定比例，例如memoryCapacity * memoryFraction * saftPoint
+ * 
+ * 2.元数据管理：
+ * 增加相应的元数据管理机制，存储数据替换和多节点的迁移策略所需要的关键信息
+ * 
+ * ****先不保证计算内存的最大使用？先保证计算内存的初始使用值。那么对于负载，需要使用特定的值。
  */
 private[spark]
 class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
   extends Actor with ActorLogReceive with Logging {
   
   val smManager: SMemoryManager = new SMemoryManager()
+  
   //初始内存，可以设定一个配置的值
-  val spaceManager: SpaceManager = new SpaceManager(0, smManager)
+  //v1：先设定为集群内存*memoryFraction，即初始内存就设置相对应的值
+  //初始内存=WorkerMemory * cmemoryFraction * safetyFraction
+  val spaceManager: SpaceManager = new SpaceManager(getNodeMaxComputaionMemory(conf, worker.memory), smManager)
+  
   val blockIndexer: BlockIndexer = new BlockIndexer()
   
   val executorWatcher: ExecutorWatcher = new ExecutorWatcher(this, spaceManager, blockIndexer)
@@ -158,7 +173,7 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
    * 注册客户端
    * 新增：
    * 1）当第一个Executor连接之后开启ExecutorWatch任务
-   * 2）向bsMaster更新存储内存信息
+   * 2）向bsMaster更新存储内存的使用信息
    */
   def registerClient(id: BlockServerClientId, maxJvmMemSize: Long, maxMemSize: Long, jvmId: Int, clientActor: ActorRef) = {
     
@@ -179,11 +194,12 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
       clientList(id) = new BlockServerClientInfo(id, System.currentTimeMillis(), maxJvmMemSize, maxMemSize, jvmId, clientActor)
 
       spaceManager.totalExecutorMemory += maxJvmMemSize
-      spaceManager.totalMemory += maxMemSize
+      //v1: Executor只分配计算内存
+      //spaceManager.totalMemory += maxMemSize
       
       //Master这里更新Total的存储内存信息
       if (worker != null)
-        worker.sendMasterBSMessage(ReqbsMasterUpdateSMemory(worker.workerId, spaceManager.totalMemory, -1L))
+        worker.sendMasterBSMessage(ReqbsMasterUpdateSMemory(worker.workerId, spaceManager.totalMemory, spaceManager.usedMemory))
       
       logInfo("Registering block server client %s with %s RAM, %s Max JVM RAM, JVMID %d, %s".format(
         id.hostPort, Utils.bytesToString(maxMemSize), Utils.bytesToString(maxJvmMemSize), jvmId, id))
@@ -362,7 +378,8 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
         removeClientBlock(clientId, clientInfo)
         logDebug("After remove BlockServerClientInfo " + clientId + " from BlockManagerWorker.")
         spaceManager.totalExecutorMemory -= clientInfo.maxJvmMemSize
-        spaceManager.totalMemory -= clientInfo.maxMemSize
+        //v1: Executor只分配计算内存
+        //spaceManager.totalMemory -= clientInfo.maxMemSize
 
       case None =>
         logWarning(s"Try to unreg client $clientId, which does not exist.")
@@ -405,6 +422,13 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
     //logInfo("****checkExecutorMemory")
     if (clientList.size > 0)
       executorWatcher.check(clientList)
+  }
+  
+  private def getNodeMaxComputaionMemory(conf: SparkConf, workerMemory: Long): Long = {
+    val cmemoryFraction = conf.getDouble("spark.smspark.cmemoryFraction", 0.5)
+    val safetyFraction = conf.getDouble("spark.storage.safetyFraction", 0.9) 
+    val cmemory = (worker.memory * cmemoryFraction * safetyFraction).toLong
+    cmemory
   }
 }
 

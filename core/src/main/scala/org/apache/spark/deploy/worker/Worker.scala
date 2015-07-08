@@ -45,7 +45,7 @@ private[spark] class Worker(
     port: Int,
     webUiPort: Int,
     cores: Int,
-    memory: Int,
+    val memory: Int, // [SMSpark]change private to public
     masterAkkaUrls: Array[String],
     actorSystemName: String,
     actorName: String,

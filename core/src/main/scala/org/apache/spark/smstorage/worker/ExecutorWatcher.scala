@@ -21,6 +21,9 @@ import scala.collection.mutable.ArrayBuffer
  * usedMemory+jvmMemory是否大于maxMemory，表明当前应用超出限制
  * 判断当前所有JVMMemorySum+UsedMemorySum是否大于maxMemorySum，或者是否大于安全比例
  * 
+ * v1: 
+ * 判断是否超限，输出到log中，进行监控。暂时不做计算内存和存储内存的动态调整
+ * 
  */
 private[spark] class ExecutorWatcher (
     bsWorker: BlockServerWorkerActor,
@@ -59,9 +62,9 @@ private[spark] class ExecutorWatcher (
     }
 
     /**
-      * 如果超出上限，则选举出一个节点，选举出一些Block进行置换，或者远程节点的迁移
+     * 如果超出上限，则选举出一个节点，选举出一些Block进行置换，或者远程节点的迁移
      * 这里使用一定的策略，把需要的参数传进去，进行选举。类似于MemoryStore中Block的替换
-     * 可以参考任务调度时候FIFO和FAIR的机制，机制和策略分离
+     * 可以参考任务调度时候FIFO和FAIR的机制，让迁移和替换的机制和策略分离
      *
      * currentTotalMemory = (computing memory sum) + (used Store Memory sum)
      * spaceManager.totalExecutorMemory = every Executor Max Memory sum
