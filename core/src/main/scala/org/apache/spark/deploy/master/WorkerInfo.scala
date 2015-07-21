@@ -52,7 +52,7 @@ private[spark] class WorkerInfo(
    */
   @transient var sblocks: mutable.HashMap[String, SBlockEntry] = _
   //BlockWorker的总可用内存
-  @transient var smemoryTotal: Long = _
+  @transient var smemoryTotal: Long = (memory * 0.5).toLong
   //BlockWorker的当前已使用内存
   @transient var smemoryUsed: Long = _
   
@@ -128,27 +128,26 @@ private[spark] class WorkerInfo(
   /**
    * [SMSpark]: 更新内存使用情况，和BlockInfo
    */
-  def updateBlockInfo(block: SBlockEntry) {
+  def updateBlockInfo(newEntry: SBlockEntry) {
     //this.smemoryUsed -= memoryUsed
     
-    sblocks.get(block.userDefinedId) match {
-      case Some(entry) =>
-        
+    sblocks.get(newEntry.userDefinedId) match {
+      case Some(oldEntry) =>
+        smemoryUsed += oldEntry.size
+        smemoryUsed -= newEntry.size
+        sblocks.update(newEntry.userDefinedId, newEntry)
       case None =>
         
     }
-    
-    //更新Block信息
-    sblocks.+= ((block.userDefinedId, block))
       
   }
   
   def updateSMemoryTotal(memoryTotal: Long) {
-     this.smemoryTotal = memoryTotal
+     smemoryTotal = memoryTotal
   }
   
   def addBlock(blockEntry: SBlockEntry) {
-    this.smemoryUsed += blockEntry.size
+    smemoryUsed += blockEntry.size
     sblocks += ((blockEntry.userDefinedId, blockEntry))
   }
   
@@ -159,8 +158,8 @@ private[spark] class WorkerInfo(
   def removeBlock(blockUid: String) {
     sblocks.get(blockUid) match {
       case Some(blockEntry) =>
-        this.smemoryUsed -= blockEntry.size
-        
+        smemoryUsed -= blockEntry.size
+        sblocks.remove(blockUid)
       case None =>
     }
     

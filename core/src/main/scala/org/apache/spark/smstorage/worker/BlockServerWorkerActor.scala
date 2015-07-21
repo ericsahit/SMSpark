@@ -23,7 +23,7 @@ import org.apache.spark.deploy.worker.Worker
  * 接收Client进行的请求，对于Akka Actor，会把客户端的请求排队
  * TODO：怎么样保存客户端的信息，以及Block的信息
  * TODO：更新Block，都会更新什么状态（可能与其他节点通信）
- * TODO：需要Client的心跳机制吗？
+ * 需要Client的心跳机制吗？现在看来不需要。
  * TODO: 每一个Block保持一个计数器，如果没有任何程序使用，表明可以删除。如果有计数器不为0，可以被替换或者
  * TODO: Worker节点向Client发送命令
  * TODO：SBlock的id匹配机制，根据RDD血统信息来进行匹配
@@ -39,7 +39,7 @@ import org.apache.spark.deploy.worker.Worker
  * 
  * add时候，向bsMaster发送ReqbsMasterAddBlock信息，异步
  * add时候，会由调用者先调用get方法，查看bsMaster是否存在此节点。
- * TODO: get时候，向bsMaster发送增加计数信息，异步
+ * TODO: get时候，向bsMaster发送增加计数信息，异步向bsMaster节点发送
  * 
  * update 2015.07.08 v1版本：
  * 1.分配存储内存空间修改为，把当前节点的可用存储内存都设置为共享的存储空间。
@@ -53,7 +53,15 @@ import org.apache.spark.deploy.worker.Worker
  * 1）数据替换代价
  * 2）迁移目标节点
  * 
+ * 3.同时Executor的结束并不会释放缓存数据的共享存储空间
+ * 
+ * update 2015.07.21 v2版本：
+ * 1.增加向bsMaster汇报元数据的管理信息，主要是在写Block时候，或者删除Block时候，对bsMaster发请求进行元数据更新
+ * 2.实现基于共享存储RDD的调度
  * ****先不保证计算内存的最大使用？先保证计算内存的初始使用值。那么对于负载，需要使用特定的值。
+ * 
+ * 目前smspark使用到的参数：
+ * spark.smspark.cmemoryFraction
  */
 private[spark]
 class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
@@ -61,9 +69,14 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
   
   val smManager: SMemoryManager = new SMemoryManager()
   
-  //初始内存，可以设定一个配置的值
-  //v1：先设定为集群内存*memoryFraction，即初始内存就设置相对应的值
-  //初始内存=WorkerMemory * cmemoryFraction * safetyFraction
+
+  //
+  /**
+   * 初始内存，可以设定一个配置的值
+   * v1：先设定为集群内存*memoryFraction，即初始内存就设置相对应的值
+   * 初始内存=WorkerMemory * cmemoryFraction * safetyFraction
+   * 最大可用内存不随着Executor生命周期的变化而变化
+   */
   val spaceManager: SpaceManager = new SpaceManager(getNodeMaxComputaionMemory(conf, worker.memory), smManager)
   
   val blockIndexer: BlockIndexer = new BlockIndexer()
@@ -107,11 +120,12 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
     logInfo("Starting Spark BlockServerWorker")
     import context.dispatcher
     //定期运行监测client是否失去链接
-    timeoutCheckingTask = context.system.scheduler.schedule(
-        0.seconds, 
-        checkTimeoutInterval.milliseconds,
-        self,
-        ExpireDeadClient)
+    //v1&v2：不需要过期检测了，数据与Executor不再耦合
+//    timeoutCheckingTask = context.system.scheduler.schedule(
+//        0.seconds, 
+//        checkTimeoutInterval.milliseconds,
+//        self,
+//        ExpireDeadClient)
         
 //   execWatchTask = context.system.scheduler.schedule(
 //       1.seconds,
@@ -133,6 +147,7 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
     blockIndexer.clear(clearEntry)
     
     if (worker != null && worker.connected) {
+      //TODO: 清理工作
       //worker.master ! 
     }
   }
@@ -286,7 +301,7 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
             blockLocation.put(blockId, location)
           }
 
-          //Master这里发送AddBlock消息，userDefinedId作为唯一id
+          //Master这里发送AddBlock异步消息，userDefinedId作为唯一id
           if (worker != null)
             worker.sendMasterBSMessage(ReqbsMasterAddBlock(worker.workerId, entry))
           
@@ -339,8 +354,12 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
    * 1) 本地进行请求删除Block
    * 2) 远程进程请求删除Block，或者本地节点根据一定策略来进行删除
    * 
-   * 删除Block是某个App删除，不一定进行物理删除，因为还可能有其他程序正在使用
+   * ****删除Block是某个App删除，不一定进行物理删除，因为还可能有其他程序正在使用
    * 
+   * v1:
+   * v2：数据的生命周期与计算脱离，所以本地删除Block并不会传递到bsWorker中
+   * 所以删除的情况只有bsWorker因为数据替换和迁移等原因，自己进行删除数据
+   * TODO：removeBlock需要重构，去除clientId参数
    */
   def removeBlock(clientId: BlockServerClientId, blockId: SBlockId) = {
     //logDebug(s"Remove block($blockId) from shared memory.")
@@ -359,9 +378,9 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
           spaceManager.releaseSpace(entry.entryId, entry.size.toInt)
           logInfo(s"Remove block($blockId) success from shared memory.")
 
-          //TODO: 通知bsMaster发送删除Block信息，或者延迟一段时间再删除
-          //worker.sendMasterBSMessage(RemoveBlock(worker.workerId, entry))
-        
+          //通知bsMaster发送删除Block信息
+          if (worker != null)
+            worker.sendMasterBSMessage(ReqbsMasterRemoveBlock(worker.workerId, blockId))
         }
       }
       
@@ -380,15 +399,18 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
    * 先加入到toRemove队列中，然后由每隔一段时间进行扫描，过一定时间则进行删除
    * 当前时间是否需要先把SpaceManager中的空间释放？不需要，因为物理空间没变。
    * 
+   * v1:
+   * v2: Executor完毕时候，并不删除缓存数据，数据生命周期与Executor脱离
    */
   def unregClient(clientId: BlockServerClientId) {
     clientList.remove(clientId) match {
       case Some(clientInfo) =>
         logInfo("Trying to remove BlockServerClientInfo " + clientId + " from BlockManagerWorker.")
-        removeClientBlock(clientId, clientInfo)
+        //v1&v2: 见上面解释，Executor结束时候并不删除所属的Block
+        //removeClientBlock(clientId, clientInfo)
         logDebug("After remove BlockServerClientInfo " + clientId + " from BlockManagerWorker.")
         spaceManager.totalExecutorMemory -= clientInfo.maxJvmMemSize
-        //v1: Executor只分配计算内存
+        //v1: Executor只分配计算内存，
         //spaceManager.totalMemory -= clientInfo.maxMemSize
 
       case None =>
@@ -418,8 +440,8 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
 
   /**
    * 检查最近没有心跳的client端，然后关闭它
-   * 这里需要有个
-   * TODO
+   * 
+   * v1&v2：不需要过期检测了，数据与Executor不再耦合
    */
   def expirtDeadClient() {
     logTrace("Checking for hosts with no recent heart beats in client")

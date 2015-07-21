@@ -3,11 +3,14 @@
  */
 package org.apache.spark.smstorage.master
 
+import java.util.{HashMap => JHashMap}
+
 import org.apache.spark.deploy.master.Master
 import scala.collection.mutable
 import org.apache.spark.smstorage.SBlockId
 import org.apache.spark.smstorage.SBlockEntry
 import org.apache.spark.Logging
+import org.apache.spark.deploy.master.WorkerInfo
 
 /**
  * @author hwang
@@ -20,6 +23,22 @@ import org.apache.spark.Logging
  * TODO：是否使用引用计数，当一个App使用Block时候，更新读取时间，增加引用计数；当程序关闭时候，减少引用计数。
  * 或者可以根据最近读取时间来进行判断
  * 
+ * 主要用来管理多个Worker节点的资源使用情况，和Block的Location情况
+ * 功能：
+ * 1）管理元数据：包含RDD所含有的Block状态，分配节点状态
+ * 2）选举一个节点，方便Worker节点做数据的迁移
+ * 
+ * 1) bsWorker注册自己，需要上报自己的节点信息，内存上限信息，这个是异步的。而且启动时候只需要汇报一次
+ * 
+ * 2) bsWorker定期定期上报自己的内存使用信息，Block更新信息，这个是定期进行汇报，主要是在Block位置进行变更时候，应该不会特别频繁
+ * Block更新信息：Block位置信息的变更，新增和删除信息
+ * bsWorker信息：内存使用状况，
+ * 3) bsWorker上报自己的RDD Block情况，bsMaster保存Block的位置信息
+ * 4) 实现基于已缓存的RDD的调度，即新启动的应用程序，发现缓存的数据已经存在，那么就直接得到缓存数据的位置，按照缓存数据的本地性进行调度
+ * 这个功能需要存储如下的状态：
+ * 每一个Block的位置；
+ * TODO: Master
+ * 
  */
 class BlockServerMaster(val master: Master) extends Logging {
   
@@ -27,8 +46,10 @@ class BlockServerMaster(val master: Master) extends Logging {
   
   /**
    * 保存Block的位置，方便查询存取
+   * Key: BlockUId 
+   * Value: WorkerId
    */
-  private val sblockLocaion = new mutable.HashMap[SBlockId, mutable.HashSet[String]]
+  private val sblockLocaion = new JHashMap[String, mutable.HashSet[String]]
   
   /**
    * 得到一个Block，这是一个同步的操作，需要返回Block是否存在
@@ -49,7 +70,8 @@ class BlockServerMaster(val master: Master) extends Logging {
   /**
    * 新增Block，异步操作，不需要返回
    * 
-   * 涉及到是否锁定Block
+   * Q: 涉及到是否并发操作Block
+   * A: 不会涉及，因为调用还是在Master Actor中，会自动排队单线程
    * 场景：在多个APP之间
    */
   def addBlock(workerId: String, newBlockEntry: SBlockEntry) {
@@ -61,14 +83,30 @@ class BlockServerMaster(val master: Master) extends Logging {
           case Some(oldBlockEntry) =>
             logWarning(s"[SMSpark]Got updateBlock to existed block $uid")
           case None =>
+            //添加Block的索引信息
             sblocks += ((uid, newBlockEntry))
-            workerInfo.addBlock(newBlockEntry)//添加Worker中的Block索引
+            //添加Worker中的Block索引信息
+            workerInfo.addBlock(newBlockEntry)
+            
+            //添加block的位置信息，Block是否会存在多个位置？在共享存储中应该是不会出现的
+            var locations: mutable.HashSet[String] = null
+            if (sblockLocaion.containsKey(uid)) {
+              locations = sblockLocaion.get(uid)
+            } else {
+              locations = new mutable.HashSet[String]
+              sblockLocaion.put(uid, locations)
+            }
+            locations.add(workerId)
+            
         }
       case None =>
         logWarning(s"[SMSpark]Got updateBlock from unregistered worker $workerId.")
     }
   }
   
+  /**
+   * memoryTotal目前不会变化，就是节点资源的配置比例
+   */
   def updateWorkerMemory(memoryTotal: Long, memoryUsed: Long) {
     
   }
@@ -76,7 +114,8 @@ class BlockServerMaster(val master: Master) extends Logging {
   /**
    * 更新Block
    * Block是不可变的，所以大小不会改变。
-   * TODO：适用场景是？
+   * Q：适用场景是？
+   * A: 修改Block的存储级别(被替换到磁盘)，数据迁移后新的位置等
    */
   def updateBlock(workerId: String, newBlockEntry: SBlockEntry) {
     
@@ -88,8 +127,19 @@ class BlockServerMaster(val master: Master) extends Logging {
           case Some(oldBlockEntry) =>
           oldBlockEntry.update(workerId, newBlockEntry)//更新Block索引
           workerInfo.updateBlockInfo(newBlockEntry)//更新Worker中的Block索引
+          
+          //添加block的位置信息，Block是否会存在多个位置？在共享存储中应该是不会出现的
+          var locations: mutable.HashSet[String] = null
+          if (sblockLocaion.containsKey(uid)) {
+            locations = sblockLocaion.get(uid)
+          } else {
+            locations = new mutable.HashSet[String]
+            sblockLocaion.put(uid, locations)
+          }
+          locations.add(workerId)
+          
           case None =>
-            logWarning(s"[SMSpark]Got updateBlock to unmap block $uid")
+            logWarning(s"[SMSpark]Got updateBlock to not indexed block $uid")
         }
       case None =>
         logWarning(s"[SMSpark]Got updateBlock from unregistered worker $workerId.")
@@ -140,8 +190,19 @@ class BlockServerMaster(val master: Master) extends Logging {
     }
   }
   
-  def removeRDD() = {
+  def removeRDD() {
     
+  }
+  
+  def getLocations(blockId: SBlockId): Seq[String] = {
+    if (sblockLocaion.containsKey(blockId.userDefinedId))
+      sblockLocaion.get(blockId.userDefinedId).toSeq
+    else
+      Seq.empty
+  }
+  
+  def getLocationMultipleSBlockId(sblockIds: Array[SBlockId]) : Seq[Seq[String]] = {
+    sblockIds.map(sblockId => getLocations(sblockId))
   }
   
 }

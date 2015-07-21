@@ -14,15 +14,21 @@ private[spark] object BlockServerMessages {
   
   //////////////////////////////////////////////////////////////////////////////////
   // Messages from the worker to master.
+  // bsWorker到bsMaster之间的消息
   //////////////////////////////////////////////////////////////////////////////////  
   sealed trait BlockServerWorkerToMaster
+  
+  //向bsMaster注册bsWorker
+  //case class RegisterBSWorker(bsWorkerId: , maxMemSize: Long, bsWorkerActor: ActorRef) extends BlockServerWorkerToMaster
   
   //更新当前Worker的使用内存
   case class ReqbsMasterUpdateSMemory(workerId: String, memoryTotal: Long, memoryUsed: Long) extends BlockServerWorkerToMaster
   //新增Block
   case class ReqbsMasterAddBlock(workerId: String, blockEntry: SBlockEntry) extends BlockServerWorkerToMaster
   //请求bsMaster删除一个Block
-  case class ReqbsMasterRemoveBlock(workerId: String, blockEntry: SBlockEntry) extends BlockServerWorkerToMaster
+  case class ReqbsMasterRemoveBlock(workerId: String, blockEntry: SBlockId) extends BlockServerWorkerToMaster
+  //Driver向bsMaster请求Block的位置，查询是否存在已有的缓存数据
+  case class ReqbsMasterGetLocations(blockIds: Array[SBlockId]) extends BlockServerWorkerToMaster
   
   //////////////////////////////////////////////////////////////////////////////////
   // Messages from the worker to client.
@@ -33,6 +39,16 @@ private[spark] object BlockServerMessages {
   
   //检查Executor的内存
   case object CheckExecutorMemory extends BlockServerWorkerToClient
+  
+  //////////////////////////////////////////////////////////////////////////////////
+  // Messages from WorkerDaemon to the bsworker.
+  // Worker到bsWorker的消息
+  //////////////////////////////////////////////////////////////////////////////////  
+  sealed trait WorkerDaemonToBSWorker
+  
+  case class RegisteredMasterDaemon(masterUrl: String) extends WorkerDaemonToBSWorker
+  
+  
   
   //////////////////////////////////////////////////////////////////////////////////
   // Messages from client to the worker.
@@ -68,6 +84,12 @@ private[spark] object BlockServerMessages {
   case class RequestNewBlock(clientId: BlockServerClientId, userDefinedId: String, size: Long) extends BlockServerClientToWorker
   
   case class WriteBlockResult(clientId: BlockServerClientId, entryId: Int, success: Boolean) extends BlockServerClientToWorker
+  
+  //////////////////////////////////////////////////////////////////////////////////
+  // Messages from WorkerDaemon to the bsworker.
+  // bsWorker到bsMaster之间的消息
+  //////////////////////////////////////////////////////////////////////////////////  
+  //sealed trait BSWorkerToBSMaster
   
   
 }

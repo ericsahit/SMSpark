@@ -45,6 +45,7 @@ public class ShmgetAccesser {
   
   /**
    * name的目录一定需要存在，否在会出现诡异问题
+   * ****在部署时候，需要使用mkdir来创建这个特殊的目录
    */
   //private static final String SM_NAME = "/home/hadoop/develop/lib";
   private static final String SM_NAME = "/data/hadoopspark";
@@ -59,10 +60,15 @@ public class ShmgetAccesser {
   
   private BitSet indexKeySet;//存储entryKey的Set
   
-  static {//改动默认的PATH
+  static {
+    //改动默认的PATH
     //System.setProperty("java.library.path", "/opt/lib");//动态链接库的目录
-      System.loadLibrary("ShmgetAccesser.so");
     //System.load("/home/hadoop/develop/lib/ShmgetAccesser.so");//访问共享内存的动态链接库
+    /**
+     * ****改动默认的PATH，在conf/Spark-env.sh中设置native library的路径
+     * export SPARK_WORKER_OPTS="-Djava.library.path=/data/hadoopspark/spark-hadoop2.3/lib/native"
+     */
+      System.loadLibrary("ShmgetAccesser.so");
   }
 
   private ShmgetAccesser(String type) {

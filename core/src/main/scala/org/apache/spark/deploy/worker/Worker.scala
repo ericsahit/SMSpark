@@ -181,6 +181,10 @@ private[spark] class Worker(
     bsWorkerActor = context.system.actorOf(Props(classOf[BlockServerWorkerActor], conf, this), blockServerWorkerActorName)
   }
   
+  /**
+   * [SMSpark]: 向bsMaster发送异步消息
+   * bsMaster目前与Master共用一个Actor
+   */
   def sendMasterBSMessage(message: Any) {
     if (coordinatorEnabled && connected) {
       master ! message

@@ -49,6 +49,9 @@ import org.apache.spark.scheduler.{EventLoggingListener, ReplayListenerBus}
 import org.apache.spark.ui.SparkUI
 import org.apache.spark.util.{ActorLogReceive, AkkaUtils, SignalLogger, Utils}
 
+import org.apache.spark.smstorage.master.BlockServerMaster
+import org.apache.spark.smstorage.BlockServerMessages._
+
 private[spark] class Master(
     host: String,
     port: Int,
@@ -87,6 +90,9 @@ private[spark] class Master(
   var nextDriverNumber = 0
 
   Utils.checkHost(host, "Expected hostname")
+  
+  //[SMSpark]: bsMaster
+  val bsMaster: BlockServerMaster = new BlockServerMaster(this)
 
   val masterMetricsSystem = MetricsSystem.createMetricsSystem("master", conf, securityMgr)
   val applicationMetricsSystem = MetricsSystem.createMetricsSystem("applications", conf,
@@ -446,6 +452,21 @@ private[spark] class Master(
 
     case BoundPortsRequest => {
       sender ! BoundPortsResponse(port, webUi.boundPort, restServerBoundPort)
+    }
+    
+    //[SMSpark]: 异步
+    case ReqbsMasterAddBlock(workerId, blockEntry) => {
+      bsMaster.addBlock(workerId, blockEntry)
+    }    
+    
+    //[SMSpark]: 异步
+    case ReqbsMasterRemoveBlock(workerId, blockId) => {
+      bsMaster.removeBlock(workerId, blockId)
+    }    
+    
+    //[SMSpark]：同步
+    case ReqbsMasterGetLocations(sblockIds) => {
+      sender ! bsMaster.getLocationMultipleSBlockId(sblockIds)
     }
   }
 

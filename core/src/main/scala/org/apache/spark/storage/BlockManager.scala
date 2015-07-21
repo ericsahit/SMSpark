@@ -453,6 +453,7 @@ private[spark] class BlockManager(
 
   /**
    * Get locations of an array of blocks.
+   * [SMSpark]：在Driver查询BlockManagerMaster之前，先查询共享的存储空间
    */
   private def getLocationBlockIds(blockIds: Array[BlockId]): Array[Seq[BlockManagerId]] = {
     val startTimeMs = System.currentTimeMillis
@@ -645,6 +646,9 @@ private[spark] class BlockManager(
     doGetRemote(blockId, asBlockResult = false).asInstanceOf[Option[ByteBuffer]]
   }
 
+  /**
+   * [SMSpark]：从远程拉取的时候，会同时从共享存储空间查询Block是否存在
+   */
   private def doGetRemote(blockId: BlockId, asBlockResult: Boolean): Option[Any] = {
     require(blockId != null, "BlockId is null")
 
@@ -652,7 +656,7 @@ private[spark] class BlockManager(
     blockId.asRDDId.map { rddBlockId =>
       val userId = rddBlockId.userDefinedId
       if (userId != null) {
-        if (sharedStore.contains(blockId)) {
+        if (sharedStore.contains(blockId)) {//会去本节点和协调者的共享存储空间中查询
           sharedStore.getBytes(blockId) match {
             case Some(bytes) =>
               logInfo(s"Found block $blockId($userId) from Shared Memory Store by userDefinedId")
