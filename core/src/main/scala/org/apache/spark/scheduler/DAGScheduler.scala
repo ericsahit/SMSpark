@@ -189,6 +189,18 @@ class DAGScheduler(
     eventProcessLoop.post(TaskSetFailed(taskSet, reason))
   }
 
+  /**
+   * ****[SMSpark]: 增加在Executor启动之后，Driver根据已经存在的共享存储数据进行本地性的调度
+   * 所以增加Executor调度之后，能根据已有的Block的本地性进行任务调度，
+   * 1.首先Master节点需要保存RDD Block的全局信息，类似于BlockManagerMasterActor的功能
+   * 2.其次Driver程序的DAGSchduler在生成RDD的DAG依赖时，通过getCacheLocs来发生RDD是否已经被缓存
+   * 3.getCacheLocs调用BlockManager.blockIdsToBlockManagers，调用BlockManager.getLocationBlockIds
+   * 最终会调用到BlockManagerMaster.getLocations(blockIds)
+   * 4.需要修改BlockManager.getLocationBlockIds，不仅仅从BlockManagerMaster读取Block位置，不存在的话，还需要
+   * 从BlockServerMaster来读取BlockLocations
+   * 5.其中共享存储中并没有executor信息，只有节点信息。所以需要获取节点上现存的executor信息BlockManagerId
+   * 即是：先从ShareMemory中获取节点信息，然后再从Driver中获取executor信息，然后拼接即可
+   */
   private def getCacheLocs(rdd: RDD[_]): Array[Seq[TaskLocation]] = cacheLocs.synchronized {
     // Note: this doesn't use `getOrElse()` because this method is called O(num tasks) times
     if (!cacheLocs.contains(rdd.id)) {

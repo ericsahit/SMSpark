@@ -42,6 +42,9 @@ import org.apache.spark.smstorage.client.LocalMemoryStore
 import org.apache.spark.smstorage.client.BlockServerClient
 import org.apache.spark.smstorage.BlockServerClientId
 import org.apache.spark.smstorage.client.LocalMemoryStore
+import org.apache.spark.deploy.master.Master
+import org.apache.spark.smstorage.SBlockId
+import org.apache.spark.smstorage.BlockServerMessages._
 
 private[spark] sealed trait BlockValues
 private[spark] case class ByteBufferValues(buffer: ByteBuffer) extends BlockValues
@@ -100,6 +103,7 @@ private[spark] class BlockManager(
   //[SMSpark]: TODO: 需要传入Worker的通信地址
   private[spark] var sharedStore: LocalMemoryStore = null;
   private var shareMemoryInitialized = false
+  private var bsMasterActor: ActorRef = null
 
   private[spark]
   val externalShuffleServiceEnabled = conf.getBoolean("spark.shuffle.service.enabled", false)
@@ -457,7 +461,36 @@ private[spark] class BlockManager(
    */
   private def getLocationBlockIds(blockIds: Array[BlockId]): Array[Seq[BlockManagerId]] = {
     val startTimeMs = System.currentTimeMillis
-    val locations = master.getLocations(blockIds).toArray
+    var locations = master.getLocations(blockIds).toArray
+    
+    if (conf.getBoolean("spark.smspark.enable", false)) {
+      
+      var found = false
+      locations.map(seq => if (!seq.isEmpty) found = true)
+      if (found) return locations
+      //[SMSpark]: 到master取共享存储的Block 
+      logInfo("not found block in blockManagerMaster, we will find it in Shared Memory Manager.")
+      //先找到master的Actor
+      val timeout = AkkaUtils.lookupTimeout(conf)
+      
+      if (bsMasterActor == null) {
+        bsMasterActor = {
+          val masterUrl = conf.get("spark.master", "spark://centos1:7077")
+          val masterAkkaUrl = Master.toAkkaUrl(masterUrl, AkkaUtils.protocol(actorSystem))
+          logInfo(s"Connecting to BlockServerMaster: $masterAkkaUrl")
+          Await.result(actorSystem.actorSelection(masterAkkaUrl).resolveOne(timeout), timeout) 
+        }
+      }
+      
+      if (bsMasterActor != null) {
+        val appName = conf.get("spark.app.name", "")
+        val sblocks = blockIds.map(blockId => SBlockId(blockId, appName))
+        //先去bsMaster查询数据块的节点信息
+        val hosts = AkkaUtils.askWithReply[Seq[String]](ReqbsMasterGetLocations(sblocks), bsMasterActor, timeout)
+        //然后去BlockManagerMaster查询数据块的BlockManagerId信息
+        locations = master.getBlockManagerIdForHost(hosts.toArray).toArray
+      }
+    }
     logDebug("Got multiple block location in %s".format(Utils.getUsedTimeMs(startTimeMs)))
     locations
   }
@@ -648,6 +681,7 @@ private[spark] class BlockManager(
 
   /**
    * [SMSpark]：从远程拉取的时候，会同时从共享存储空间查询Block是否存在
+   * 如果共享存储空间查询存在，则会返回，但是没有注册到本Executor的BlockManager中
    */
   private def doGetRemote(blockId: BlockId, asBlockResult: Boolean): Option[Any] = {
     require(blockId != null, "BlockId is null")
@@ -1332,7 +1366,7 @@ private[spark] class BlockManager(
 
 private[spark] object BlockManager extends Logging {
   private val ID_GENERATOR = new IdGenerator
-
+  
   /** Return the total amount of storage memory available. */
   private def getMaxMemory(conf: SparkConf): Long = {
     val memoryFraction = conf.getDouble("spark.storage.memoryFraction", 0.6)

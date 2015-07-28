@@ -86,7 +86,7 @@ object SBlockId {
    * 目前格式：[userDefinedId]|[splitIndex]，在CacheManager.get中生成
    * 
    */
-  def apply(localBlockId: BlockId) = {
+  def apply(localBlockId: BlockId, appName: String = "") = {
     val rddBlockId = localBlockId.asRDDId
     if (rddBlockId.isEmpty) {
       throw new IllegalStateException("try to parse sblock which is not RDDBlock type")
@@ -94,7 +94,7 @@ object SBlockId {
     
     val userId = rddBlockId.get.userDefinedId
     if (userId == null || userId.isEmpty()) {
-      new SBlockId(rddBlockId.get.name, rddBlockId.get.name)
+      new SBlockId(appName + "|" + rddBlockId.get.name, rddBlockId.get.name)
     } else {
       new SBlockId(userId, rddBlockId.get.name)
     }

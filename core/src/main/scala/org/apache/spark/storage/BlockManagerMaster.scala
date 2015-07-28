@@ -74,6 +74,11 @@ class BlockManagerMaster(
   def getLocations(blockIds: Array[BlockId]): Seq[Seq[BlockManagerId]] = {
     askDriverWithReply[Seq[Seq[BlockManagerId]]](GetLocationsMultipleBlockIds(blockIds))
   }
+  
+    /** [SMSpark]: Get locations of multiple blockIds from the driver */
+  def getBlockManagerIdForHost(hosts: Array[String]): Seq[Seq[BlockManagerId]] = {
+    askDriverWithReply[Seq[Seq[BlockManagerId]]](GetBlockManagerIdForHost(hosts))
+  }
 
   /**
    * Check if block manager master has a block. Note that this can be used to check for only

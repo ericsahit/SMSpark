@@ -93,6 +93,9 @@ private[spark] object BlockManagerMessages {
   case class GetPeers(blockManagerId: BlockManagerId) extends ToBlockManagerMaster
 
   case class GetActorSystemHostPortForExecutor(executorId: String) extends ToBlockManagerMaster
+  
+  //[SMSpark]: 
+  case class GetBlockManagerIdForHost(hosts: Array[String]) extends ToBlockManagerMaster
 
   case class RemoveExecutor(execId: String) extends ToBlockManagerMaster
 

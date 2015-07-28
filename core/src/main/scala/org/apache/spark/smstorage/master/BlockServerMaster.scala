@@ -194,9 +194,13 @@ class BlockServerMaster(val master: Master) extends Logging {
     
   }
   
+  /**
+   * 从Driver端获取BlockServerMaster中的缓存数据情况
+   */
   def getLocations(blockId: SBlockId): Seq[String] = {
-    if (sblockLocaion.containsKey(blockId.userDefinedId))
-      sblockLocaion.get(blockId.userDefinedId).toSeq
+    if (sblockLocaion.containsKey(blockId.userDefinedId)) {
+      sblockLocaion.get(blockId.userDefinedId).map { workerId => master.idToWorker.get(workerId).get.host }.toSeq
+    }
     else
       Seq.empty
   }

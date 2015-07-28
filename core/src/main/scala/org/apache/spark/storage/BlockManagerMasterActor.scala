@@ -107,6 +107,9 @@ class BlockManagerMasterActor(val isLocal: Boolean, conf: SparkConf, listenerBus
 
     case RemoveBroadcast(broadcastId, removeFromDriver) =>
       sender ! removeBroadcast(broadcastId, removeFromDriver)
+      
+    case GetBlockManagerIdForHost(hosts) =>
+      sender ! getBlockManagerIdForHost(hosts)
 
     case RemoveBlock(blockId) =>
       removeBlockFromWorkers(blockId)
@@ -410,6 +413,16 @@ class BlockManagerMasterActor(val isLocal: Boolean, conf: SparkConf, listenerBus
     } else {
       Seq.empty
     }
+  }
+  
+  /**
+   * [SMSpark]
+   */
+  private def getBlockManagerIdForHost(hosts: Array[String]): Seq[Seq[BlockManagerId]] = {
+    hosts.map { host =>
+      val blockManagerIds = blockManagerInfo.keySet
+      blockManagerIds.filter { _.host == host }.toSeq
+    }.toSeq
   }
 
   /**
