@@ -459,7 +459,7 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
   private def getNodeMaxComputaionMemory(conf: SparkConf, workerMemory: Long): Long = {
     val cmemoryFraction = conf.getDouble("spark.smspark.cmemoryFraction", 0.5)
     val safetyFraction = conf.getDouble("spark.storage.safetyFraction", 0.9) 
-    val cmemory = (worker.memory * cmemoryFraction * safetyFraction).toLong
+    val cmemory = (workerMemory * cmemoryFraction * safetyFraction * 1024 * 1024).toLong
     cmemory
   }
 }
