@@ -99,6 +99,7 @@ class LocalMemoryStore(
    * 如果本地Block映射不存在，则去worker节点进行查询。
    * 查询不到的场合比较少，因为大多数block都是本Executor来进行注册的，本地列表中都存在缓存。
    * 改进并发访问效率
+   * v2：每一次访问都异步的对worker发送
    */
   private def fetchBlockIfNotExist(blockId: SBlockId) = {
     var entry: SBlockEntry = null

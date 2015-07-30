@@ -21,10 +21,11 @@ import java.io.ObjectInput
 private[spark] class BlockServerClientId (
     private var executorId_ : String,
     private var host_ : String,
-    private var port_ : Int)
+    private var port_ : Int,
+    private var appName_ : String)
   extends Externalizable {
   
-  private def this() = this(null, null, 0)
+  private def this() = this(null, null, 0, null)
   
   if (null != host_) {
     Utils.checkHost(host_, "Expected hostname")
@@ -37,6 +38,8 @@ private[spark] class BlockServerClientId (
   
   def port: Int = port_
   
+  def appName: String = appName_
+  
   def hostPort: String = {
     Utils.checkHost(host)
     assert(port > 0)
@@ -47,12 +50,14 @@ private[spark] class BlockServerClientId (
     out.writeUTF(executorId_)
     out.writeUTF(host_)
     out.writeInt(port_)
+    out.writeUTF(appName_)
   }
   
   override def readExternal(in: ObjectInput): Unit = Utils.tryOrIOException {
     executorId_ = in.readUTF()
     host_ = in.readUTF()
     port_ = in.readInt()
+    appName_ = in.readUTF()
   }
   
   override def toString() = s"BlockServerClientId($executorId, $host, $port)"
@@ -73,8 +78,8 @@ private[spark] class BlockServerClientId (
 
 private[spark] object BlockServerClientId {
   
-  def apply(execId: String, host: String, port: Int) = {
-    get(new BlockServerClientId(execId, host, port))
+  def apply(execId: String, host: String, port: Int, appName: String = "") = {
+    get(new BlockServerClientId(execId, host, port, appName))
   }
   
   def apply(in: ObjectInput) = {

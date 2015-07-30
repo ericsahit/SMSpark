@@ -80,6 +80,9 @@ private[spark] object BlockServerMessages {
   //读Block
   case class GetBlock(clientId: BlockServerClientId, blockId: SBlockId) extends BlockServerClientToWorker
   
+  //读Block时候增加计数
+  case class ReadSBlock(sblockId: SBlockId, appName: String) extends BlockServerClientToWorker
+  
   //写Block
   case class RequestNewBlock(clientId: BlockServerClientId, userDefinedId: String, size: Long) extends BlockServerClientToWorker
   

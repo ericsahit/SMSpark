@@ -60,10 +60,25 @@ private[spark] class SBlockEntry (
   //最后一次访问时间
   
   //Coordinator使用，当前有几个程序正在使用
-  @transient var usingWorkers = new scala.collection.mutable.HashSet[String]
+  @transient val usingWorkers = new scala.collection.mutable.HashSet[String]
+  
+  // 记录有多少个应用程序访问了
+  @transient val usingApps = new scala.collection.mutable.HashSet[String]
   
   def updateReadTime() = {
     lastReadTime = System.currentTimeMillis()
+  }
+  
+  def markReadBlock(appName: String, isLocal: Boolean = true) {
+    updateReadTime()
+    visitCount += 1;
+    if (isLocal)
+      visitLocalCount += 1;
+    else
+      visitRemoteCount += 1;
+    if (!usingApps.contains(appName))
+      visitAppCount += 1;
+    usingApps += appName
   }
   
   /**

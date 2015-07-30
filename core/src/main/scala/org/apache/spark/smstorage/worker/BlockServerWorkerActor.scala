@@ -189,6 +189,8 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
     case BlockContains(blockId, local) => //TODO：是否本地？
       sender ! blockIndexer.contains(blockId)
 
+    case ReadSBlock(sblockId, appName) =>
+      markReadBlock(sblockId, appName)
 
     case other =>
       logWarning("unknown blockServerClient message: " + other)
@@ -331,6 +333,7 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
     
     val block = blockIndexer.getBlock(blockId)
     if (block.isDefined) {
+      //TODO: v2是否去掉blockLocation，因为数据与应用程序去耦合
       if (blockLocation.containsKey(blockId)) {
         blockLocation.get(blockId).add(clientId)
       } else {
@@ -338,6 +341,7 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
         location.add(clientId)
         blockLocation.put(blockId, location)
       }
+      block.get.markReadBlock(clientId.appName, isLocal = true)
       //TODO: Master这里是否增加引用计数
       //worker.sendMasterBSMessage(null)
     } else {
@@ -435,6 +439,15 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
   
   def updateBlockStatus(clientId: BlockServerClientId, blockId: SBlockId) {
     
+  }
+  
+  /**
+   * 增加读Block的计数
+   */
+  def markReadBlock(sblockId: SBlockId, appName: String) {
+    blockIndexer.getBlock(sblockId).map { entry =>
+      entry.markReadBlock(appName)
+    }
   }
   
 

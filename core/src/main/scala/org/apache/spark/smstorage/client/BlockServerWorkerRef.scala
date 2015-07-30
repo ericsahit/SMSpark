@@ -17,7 +17,9 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * @author hwang
  * 与BlockServerWorker进行通信发送请求
- * TODO
+ * TODO:
+ * datarepl:增加本地读写的一些计数器，异步发送到blockServerWorker
+ * 读Block时候发送sblockId, appName过去
  */
 class BlockServerClient(val clientId: BlockServerClientId, var blockServerWorkerActor: ActorRef, conf: SparkConf)
   extends Logging {
@@ -116,6 +118,10 @@ class BlockServerClient(val clientId: BlockServerClientId, var blockServerWorker
    */
   def stop() {
     
+  }
+  
+  def markReadBlock(sblockId: SBlockId) {
+    blockServerWorkerActor ! ReadSBlock(sblockId, clientId.appName)
   }
   
     

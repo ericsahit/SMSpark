@@ -228,8 +228,9 @@ private[spark] class BlockManager(
 //        Props(new BlockManagerSlaveActor(this, mapOutputTracker)),
 //        name = "BlockServerClientActor" + BlockManager.ID_GENERATOR.next)
       shareMemoryInitialized = true
+      val appName = conf.get("spark.app.name", "")
       val jvmId: Int = Utils.getJvmId()
-      val clientId = BlockServerClientId(executorId, blockTransferService.hostName, blockTransferService.port)
+      val clientId = BlockServerClientId(executorId, blockTransferService.hostName, blockTransferService.port, appName)
       val client = new BlockServerClient(clientId, bsWorker, conf)
       val maxSharedMemory = BlockManager.getMaxSharedMemory(conf)
       sharedStore = new LocalMemoryStore(this, maxSharedMemory, client)
@@ -464,15 +465,14 @@ private[spark] class BlockManager(
     var locations = master.getLocations(blockIds).toArray
     
     if (conf.getBoolean("spark.smspark.enable", false)) {
-      
+      logInfo("[SMSpark]: Begin to find block from shared memory space.")
       var found = false
       locations.map(seq => if (!seq.isEmpty) found = true)
       if (found) return locations
       //[SMSpark]: 到master取共享存储的Block 
-      logInfo("not found block in blockManagerMaster, we will find it in Shared Memory Manager.")
+      logInfo("[SMSpark]: not found block in blockManagerMaster, we will find it in Shared Memory Manager.")
       //先找到master的Actor
       val timeout = AkkaUtils.lookupTimeout(conf)
-      
       if (bsMasterActor == null) {
         bsMasterActor = {
           val masterUrl = conf.get("spark.master", "spark://centos1:7077")
