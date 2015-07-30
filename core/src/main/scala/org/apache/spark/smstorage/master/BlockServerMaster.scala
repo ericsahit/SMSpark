@@ -199,6 +199,7 @@ class BlockServerMaster(val master: Master) extends Logging {
    */
   def getLocations(blockId: SBlockId): Seq[String] = {
     if (sblockLocaion.containsKey(blockId.userDefinedId)) {
+      logDebug(s"[SMSpark]: Find location for block $blockId")
       sblockLocaion.get(blockId.userDefinedId).map { workerId => master.idToWorker.get(workerId).get.host }.toSeq
     }
     else

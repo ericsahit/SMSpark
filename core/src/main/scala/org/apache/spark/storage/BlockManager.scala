@@ -461,6 +461,7 @@ private[spark] class BlockManager(
    * [SMSpark]：在Driver查询BlockManagerMaster之前，先查询共享的存储空间
    */
   private def getLocationBlockIds(blockIds: Array[BlockId]): Array[Seq[BlockManagerId]] = {
+    logDebug("[SMSpark]: Begin to get block locations.")
     val startTimeMs = System.currentTimeMillis
     var locations = master.getLocations(blockIds).toArray
     
@@ -470,14 +471,14 @@ private[spark] class BlockManager(
       locations.map(seq => if (!seq.isEmpty) found = true)
       if (found) return locations
       //[SMSpark]: 到master取共享存储的Block 
-      logInfo("[SMSpark]: not found block in blockManagerMaster, we will find it in Shared Memory Manager.")
+      logInfo("[SMSpark]: Not found block in blockManagerMaster, we will find it in Shared Memory Manager.")
       //先找到master的Actor
       val timeout = AkkaUtils.lookupTimeout(conf)
       if (bsMasterActor == null) {
         bsMasterActor = {
           val masterUrl = conf.get("spark.master", "spark://centos1:7077")
           val masterAkkaUrl = Master.toAkkaUrl(masterUrl, AkkaUtils.protocol(actorSystem))
-          logInfo(s"Connecting to BlockServerMaster: $masterAkkaUrl")
+          logDebug(s"[SMSpark]: Connecting to BlockServerMaster: $masterAkkaUrl")
           Await.result(actorSystem.actorSelection(masterAkkaUrl).resolveOne(timeout), timeout) 
         }
       }
@@ -486,8 +487,10 @@ private[spark] class BlockManager(
         val appName = conf.get("spark.app.name", "")
         val sblocks = blockIds.map(blockId => SBlockId(blockId, appName))
         //先去bsMaster查询数据块的节点信息
+        logDebug(s"[SMSpark]: Connecting to BlockServerMaster for message ReqbsMasterGetLocations.")
         val hosts = AkkaUtils.askWithReply[Seq[String]](ReqbsMasterGetLocations(sblocks), bsMasterActor, timeout)
         //然后去BlockManagerMaster查询数据块的BlockManagerId信息
+        logDebug(s"[SMSpark]: Connecting to BlockManagerMaster for message getBlockManagerIdForHost.")
         locations = master.getBlockManagerIdForHost(hosts.toArray).toArray
       }
     }
