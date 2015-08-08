@@ -95,7 +95,7 @@ private[spark] object BlockManagerMessages {
   case class GetActorSystemHostPortForExecutor(executorId: String) extends ToBlockManagerMaster
   
   //[SMSpark]: 
-  case class GetBlockManagerIdForHost(hosts: Array[String]) extends ToBlockManagerMaster
+  case class GetBlockManagerIdForHost(hosts: Seq[Seq[String]]) extends ToBlockManagerMaster
 
   case class RemoveExecutor(execId: String) extends ToBlockManagerMaster
 

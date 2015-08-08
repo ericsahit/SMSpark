@@ -463,15 +463,16 @@ private[spark] class BlockManager(
   private def getLocationBlockIds(blockIds: Array[BlockId]): Array[Seq[BlockManagerId]] = {
     logDebug("[SMSpark]: Begin to get block locations.")
     val startTimeMs = System.currentTimeMillis
+    var locationsSeq = master.getLocations(blockIds)
+    logDebug(s"[SMSpark]: Get block locations from BlockManagerMaster: $locationsSeq")
     var locations = master.getLocations(blockIds).toArray
-    
     if (conf.getBoolean("spark.smspark.enable", false)) {
       logInfo("[SMSpark]: Begin to find block from shared memory space.")
       var found = false
       locations.map(seq => if (!seq.isEmpty) found = true)
       if (found) return locations
       //[SMSpark]: 到master取共享存储的Block 
-      logInfo("[SMSpark]: Not found block in blockManagerMaster, we will find it in Shared Memory Manager.")
+      logInfo("[SMSpark-20150804]: Not found block in blockManagerMaster, we will find it in Shared Memory Manager.")
       //先找到master的Actor
       val timeout = AkkaUtils.lookupTimeout(conf)
       if (bsMasterActor == null) {
@@ -487,11 +488,14 @@ private[spark] class BlockManager(
         val appName = conf.get("spark.app.name", "")
         val sblocks = blockIds.map(blockId => SBlockId(blockId, appName))
         //先去bsMaster查询数据块的节点信息
-        logDebug(s"[SMSpark]: Connecting to BlockServerMaster for message ReqbsMasterGetLocations.")
-        val hosts = AkkaUtils.askWithReply[Seq[String]](ReqbsMasterGetLocations(sblocks), bsMasterActor, timeout)
+        logDebug(s"[SMSpark]: Connecting to BlockServerMaster for message ReqbsMasterGetLocations ${sblocks.toSeq}.")
+        val hosts = AkkaUtils.askWithReply[Seq[Seq[String]]](ReqbsMasterGetLocations(sblocks), bsMasterActor, timeout)
+
         //然后去BlockManagerMaster查询数据块的BlockManagerId信息
-        logDebug(s"[SMSpark]: Connecting to BlockManagerMaster for message getBlockManagerIdForHost.")
-        locations = master.getBlockManagerIdForHost(hosts.toArray).toArray
+        logDebug(s"[SMSpark]: Connecting to BlockManagerMaster for message getBlockManagerIdForHost $hosts.")
+        val bmIds = master.getBlockManagerIdForHost(hosts)
+        locations = bmIds.toArray
+        logDebug(s"[SMSpark]: From BlockManagerMaster We have got ${bmIds} for such blocks.")
       }
     }
     logDebug("Got multiple block location in %s".format(Utils.getUsedTimeMs(startTimeMs)))
@@ -691,7 +695,8 @@ private[spark] class BlockManager(
 
     //[SMSpark:] first find SharedMemoryStore for block if block is RDDBlock and userDefinedId is not null
     blockId.asRDDId.map { rddBlockId =>
-      val userId = rddBlockId.userDefinedId
+      //val userId = rddBlockId.userDefinedId
+      val userId = "now user defined id need not must exist."
       if (userId != null) {
         if (sharedStore.contains(blockId)) {//会去本节点和协调者的共享存储空间中查询
           sharedStore.getBytes(blockId) match {
@@ -709,6 +714,8 @@ private[spark] class BlockManager(
             case None =>
               logDebug(s"Block $blockId not found in shared memory store")
           }
+        } else {
+          logDebug(s"Block $blockId not contains in shared memory store.")
         }
       }
     }
@@ -1409,11 +1416,12 @@ private[spark] object BlockManager extends Logging {
 
     // blockManagerMaster != null is used in tests
     assert(env != null || blockManagerMaster != null)
-    val blockLocations: Seq[Seq[BlockManagerId]] = if (blockManagerMaster == null) {
-      env.blockManager.getLocationBlockIds(blockIds)
-    } else {
-      blockManagerMaster.getLocations(blockIds)
-    }
+//    val blockLocations: Seq[Seq[BlockManagerId]] = if (blockManagerMaster == null) {
+//      env.blockManager.getLocationBlockIds(blockIds)
+//    } else {
+//      blockManagerMaster.getLocations(blockIds)
+//    }
+    val blockLocations: Seq[Seq[BlockManagerId]] = env.blockManager.getLocationBlockIds(blockIds)
 
     val blockManagers = new HashMap[BlockId, Seq[BlockManagerId]]
     for (i <- 0 until blockIds.length) {

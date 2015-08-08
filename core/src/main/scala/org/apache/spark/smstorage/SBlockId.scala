@@ -94,7 +94,8 @@ object SBlockId {
     
     val userId = rddBlockId.get.userDefinedId
     if (userId == null || userId.isEmpty()) {
-      new SBlockId(appName + "|" + rddBlockId.get.name, rddBlockId.get.name)
+      //new SBlockId(appName + "|" + rddBlockId.get.name, rddBlockId.get.name)
+      new SBlockId("|" + rddBlockId.get.name, rddBlockId.get.name)
     } else {
       new SBlockId(userId, rddBlockId.get.name)
     }

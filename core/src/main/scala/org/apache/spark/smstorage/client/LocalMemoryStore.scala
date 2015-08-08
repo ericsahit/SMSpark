@@ -177,16 +177,23 @@ class LocalMemoryStore(
       case Some(entry) => 
         var success = true
         try {
+          logDebug(s"Success to reqNewBlock from bsWorker, will write $sid to SharedMemoryStore. entryid: ${entry.entryId}, limit: ${byteBuffer.limit()}")
           //TODO: 远程写
           os = LocalBlockOutputStream.getLocalOutputStream("shmget", entry.entryId, byteBuffer.limit())
+
+          assert(os != null)
           //os = BlockOutputStream("shmget", entry.entryStr)
           os.write(byteBuffer.array())
         } catch {
           case ioe: IOException =>
             logWarning(s"Failed to write the block $sid to SharedMemoryStore", ioe)
-            success = false
+          case e: Exception =>
+            logWarning(s"Failed to write the block $sid to SharedMemoryStore", e)
+
+          success = false
         } finally {
-          os.close()
+          if (os != null)
+            os.close()
         }
         
         //success=false有两种情况：1.服务器返回空间不足。2.写文件出错。对于第二种情况，需要对worker进行写结果，成功或失败
