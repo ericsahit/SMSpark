@@ -104,9 +104,9 @@ class LocalMemoryStore(
   private def fetchBlockIfNotExist(blockId: SBlockId) = {
     var entry: SBlockEntry = null
     if (!entries.containsKey(blockId)) {
-      logInfo("Local block not exist. fectch from Shared memory.")
+      logInfo(s"Local sblock $blockId not exist. fectch from Shared memory.")
       serverClient.getBlock(blockId).map { res =>
-        logInfo("Fectch block from Shared memory success, put it into local block data manager.")
+        logInfo(s"Fectch block $blockId from Shared memory success, put it into local block data manager.")
         entry = res
         entries.put(blockId, entry)
       }

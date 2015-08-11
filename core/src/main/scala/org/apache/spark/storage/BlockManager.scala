@@ -331,7 +331,12 @@ private[spark] class BlockManager(
     if (blockId.isShuffle) {
       shuffleManager.shuffleBlockManager.getBlockData(blockId.asInstanceOf[ShuffleBlockId])
     } else {
-      val blockBytesOpt = doGetLocal(blockId, asBlockResult = false)
+      var transBlockId = blockId
+      if (transBlockId.isRDD) {
+        transBlockId = BlockId(blockId.name, "noverifyuserid")
+        logDebug(s"we transfer block ${SBlockId(blockId)} to sblock ${SBlockId(transBlockId)}")
+      }
+      val blockBytesOpt = doGetLocal(transBlockId, asBlockResult = false)
         .asInstanceOf[Option[ByteBuffer]]
       if (blockBytesOpt.isDefined) {
         val buffer = blockBytesOpt.get
@@ -463,7 +468,7 @@ private[spark] class BlockManager(
   private def getLocationBlockIds(blockIds: Array[BlockId]): Array[Seq[BlockManagerId]] = {
     logDebug("[SMSpark]: Begin to get block locations.")
     val startTimeMs = System.currentTimeMillis
-    var locationsSeq = master.getLocations(blockIds)
+    val locationsSeq = master.getLocations(blockIds)
     logDebug(s"[SMSpark]: Get block locations from BlockManagerMaster: $locationsSeq")
     var locations = master.getLocations(blockIds).toArray
     if (conf.getBoolean("spark.smspark.enable", false)) {
@@ -472,7 +477,7 @@ private[spark] class BlockManager(
       locations.map(seq => if (!seq.isEmpty) found = true)
       if (found) return locations
       //[SMSpark]: 到master取共享存储的Block 
-      logInfo("[SMSpark-20150804]: Not found block in blockManagerMaster, we will find it in Shared Memory Manager.")
+      logInfo("[SMSpark-20150808]: Not found block in blockManagerMaster, we will find it in Shared Memory Manager.")
       //先找到master的Actor
       val timeout = AkkaUtils.lookupTimeout(conf)
       if (bsMasterActor == null) {

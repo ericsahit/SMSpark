@@ -133,4 +133,11 @@ object BlockId {
     case _ =>
       throw new IllegalStateException("Unrecognized BlockId: " + id)
   }
+
+  def apply(id: String, userId: String) = id match {
+    case RDD(rddId, splitIndex) =>
+      RDDBlockId(rddId.toInt, splitIndex.toInt, userId + "|" + splitIndex)
+    case _ =>
+      throw new IllegalStateException("Unrecognized BlockId: " + id)
+  }
 }

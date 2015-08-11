@@ -51,7 +51,7 @@ class SBlockId(
   override def hashCode = if (userDefinedId.isEmpty()) name.hashCode else userDefinedId.hashCode
   override def equals(other: Any): Boolean = other match {
     case o: SBlockId =>
-      if (!userDefinedId.isEmpty()) {
+      if (!userDefinedId.isEmpty() && !userDefinedId.contains("noverifyuserid")) {
         userDefinedId.equals(o.userDefinedId)
       } else {
         name.equals(o.name) && localBlockId.equals(o.localBlockId)
