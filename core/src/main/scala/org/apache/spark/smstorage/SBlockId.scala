@@ -48,10 +48,11 @@ class SBlockId(
   //def rddDepId: Long
   
   override def toString = s"$userDefinedId,$localBlockId,$name"
-  override def hashCode = if (userDefinedId.isEmpty() || userDefinedId.contains("noverifyuserid")) localBlockId.hashCode else userDefinedId.hashCode
+  //override def hashCode = if (userDefinedId.isEmpty() || userDefinedId.contains("noverifyuserid")) localBlockId.hashCode else userDefinedId.hashCode
+  override def hashCode = localBlockId.hashCode
   override def equals(other: Any): Boolean = other match {
     case o: SBlockId =>
-      if (!userDefinedId.isEmpty() && !userDefinedId.contains("noverifyuserid")) {
+      if (!userDefinedId.isEmpty() && !userDefinedId.contains("noverifyuserid") && !o.userDefinedId.contains("noverifyuserid")) {
         userDefinedId.equals(o.userDefinedId)
       } else {
         localBlockId.equals(o.localBlockId)
