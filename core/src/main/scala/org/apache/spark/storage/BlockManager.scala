@@ -1307,11 +1307,13 @@ private[spark] object BlockManager extends Logging {
     }
   }
 
+  //单例方法
   def blockIdsToBlockManagers(
       blockIds: Array[BlockId],
       env: SparkEnv,
       blockManagerMaster: BlockManagerMaster = null): Map[BlockId, Seq[BlockManagerId]] = {
 
+    //****实际使用中blockManagerMaster都为空，所以调用了env.blockManager.getLocationBlockIds(blockIds)
     // blockManagerMaster != null is used in tests
     assert(env != null || blockManagerMaster != null)
     val blockLocations: Seq[Seq[BlockManagerId]] = if (blockManagerMaster == null) {
@@ -1320,6 +1322,7 @@ private[spark] object BlockManager extends Logging {
       blockManagerMaster.getLocations(blockIds)
     }
 
+    //将Seq[Seq]转换为Map[BlockId, Seq]
     val blockManagers = new HashMap[BlockId, Seq[BlockManagerId]]
     for (i <- 0 until blockIds.length) {
       blockManagers(blockIds(i)) = blockLocations(i)

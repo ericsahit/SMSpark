@@ -105,6 +105,9 @@ class DAGScheduler(
    * locations where that RDD partition is cached.
    *
    * All accesses to this map should be guarded by synchronizing on it (see SPARK-4454).
+   * 
+   * 存储了RDD的保存位置，key是RDD id，value是partition排序的位置
+   * 
    */
   private val cacheLocs = new HashMap[Int, Array[Seq[TaskLocation]]]
 
@@ -190,9 +193,19 @@ class DAGScheduler(
     eventProcessLoop.post(TaskSetFailed(taskSet, reason))
   }
 
+  /**
+   * ****[SMSpark]: 增加在Executor启动之后，Driver根据已经存在的共享存储数据
+   * 所以增加Executor调度之后，能根据已有的Block的本地性进行任务调度，
+   * 1.首先Master节点需要保存RDD Block的全局信息，类似于BlockManagerMasterActor的功能
+   * 2.其次Driver程序的DAGSchduler在生成RDD的DAG依赖时，通过getCacheLocs来发生RDD是否已经被缓存
+   * 3.getCacheLocs调用BlockManager.blockIdsToBlockManagers，调用BlockManager.getLocationBlockIds
+   * 最终会调用到BlockManagerMaster.getLocations(blockIds)
+   * 4.需要修改BlockManager.getLocationBlockIds，不仅仅从BlockManagerMaster读取Block位置，不存在的话，还需要
+   * 从BlockServerMaster来读取BlockLocations
+   */
   private def getCacheLocs(rdd: RDD[_]): Array[Seq[TaskLocation]] = cacheLocs.synchronized {
     // Note: this doesn't use `getOrElse()` because this method is called O(num tasks) times
-    if (!cacheLocs.contains(rdd.id)) {
+    if (!cacheLocs.contains(rdd.id)) {//如果RDDid不存在，需要去BlockManager中去查询，所以唯一入口又回到BlockManager.blockIdsToBlockManagers
       val blockIds = rdd.partitions.indices.map(index => RDDBlockId(rdd.id, index)).toArray[BlockId]
       val locs = BlockManager.blockIdsToBlockManagers(blockIds, env, blockManagerMaster)//得到当前Cached RDD的Block位置
       cacheLocs(rdd.id) = blockIds.map { id =>
@@ -372,6 +385,7 @@ class DAGScheduler(
       if (!visited(rdd)) {
         visited += rdd
         //如果RDD不存在一个Cached Block（其中调用了BlockManager.blockIdsToBlockManagers(blockIds, env, blockManagerMaster)）
+        //如果存在呢？直接可以从Cached RDD的位置开始计算
         if (getCacheLocs(rdd).contains(Nil)) {
           for (dep <- rdd.dependencies) {
             dep match {
