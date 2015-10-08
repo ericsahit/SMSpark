@@ -39,6 +39,25 @@ import org.apache.spark.util.{AkkaUtils, Utils}
  * which provides all the necessary functionality for handling the data received by
  * the receiver. Specifically, it creates a [[org.apache.spark.streaming.receiver.BlockGenerator]]
  * object that is used to divide the received data stream into blocks of data.
+ * 
+ * 
+ * Worker端：
+ * ReceiverSupervisorImpl是入口，start方法会启动receiver（receiver会启动接收线程），
+ * ReceiverSupervisorImpl 运行在worker中，用来作为Receiver的监督者。处理receiver接收到的所有数据
+ * Receiver接收到的数据都交给ReceiverSupervisor，然后定期存储到BlockManager中
+ * ReceivedBlockHandler：定期接收到的数据怎么处理
+ * BlockGenerator：负责定期去处理Receiver传输过来的数据，放到BlockManager中，
+ * 其中含有currentBuffer，Receiver定期将数据放到currentBuffer中，而BlockGenerator定期将currentBuffer中数据形成一个Block，写到blockManager中
+ * 
+ * Driver端：
+ * JobScheduler：
+ * 	GobGenerator：里面含有clock和timer，负责定期产生job任务，然后调用JobScheduler.submit来提交
+ *    clock：
+ *    RecurringTimer：根据batchDuration，定期产生job，并且提交
+ * 	ReceiverTracker负责跟踪Receiver产生的RDD，在计算时候可以直接拿到RDD进行运算
+ *    ReceiverTrackerActor：与receiver通信的actor
+ *    ReceiverLauncher：启动worker上的receiver
+ * 
  */
 private[streaming] class ReceiverSupervisorImpl(
     receiver: Receiver[_],

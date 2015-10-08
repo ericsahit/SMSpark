@@ -50,6 +50,9 @@ private[streaming] case class DeregisterReceiver(streamId: Int, msg: String, err
  * has been called because it needs the final set of input streams at the time of instantiation.
  *
  * @param skipReceiverLaunch Do not launch the receiver. This is useful for testing.
+ * 
+ * ReceiverTrackerActor 
+ * ReceiverLauncher：
  */
 private[streaming]
 class ReceiverTracker(ssc: StreamingContext, skipReceiverLaunch: Boolean = false) extends Logging {
@@ -287,7 +290,7 @@ class ReceiverTracker(ssc: StreamingContext, skipReceiverLaunch: Boolean = false
       val serializableHadoopConf = new SerializableWritable(ssc.sparkContext.hadoopConfiguration)
 
       // Function to start the receiver on the worker node
-      val startReceiver = (iterator: Iterator[Receiver[_]]) => {
+      val startReceiver = (iterator: Iterator[Receiver[_]]) => { //在executor中执行的代码
         if (!iterator.hasNext) {
           throw new SparkException(
             "Could not start receiver as object not found.")
@@ -307,6 +310,7 @@ class ReceiverTracker(ssc: StreamingContext, skipReceiverLaunch: Boolean = false
       // Distribute the receivers and start them
       logInfo("Starting " + receivers.length + " receivers")
       running = true
+      //向集群提交一个job，对tempRDD进行startReceiver操作
       ssc.sparkContext.runJob(tempRDD, ssc.sparkContext.clean(startReceiver))
       running = false
       logInfo("All of the receivers have been terminated")

@@ -19,29 +19,52 @@ package org.apache.spark.rdd
 
 import java.util.Random
 
-import scala.collection.{mutable, Map}
+import scala.Array.canBuildFrom
+import scala.Array.fallbackCanBuildFrom
+import scala.collection.Map
+import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.language.implicitConversions
-import scala.reflect.{classTag, ClassTag}
+import scala.reflect.ClassTag
+import scala.reflect.classTag
 
-import com.clearspring.analytics.stream.cardinality.HyperLogLogPlus
-import org.apache.hadoop.io.{Writable, BytesWritable, NullWritable, Text}
-import org.apache.hadoop.io.compress.CompressionCodec
+import org.apache.hadoop.io.BytesWritable
+import org.apache.hadoop.io.NullWritable
+import org.apache.hadoop.io.Text
 import org.apache.hadoop.mapred.TextOutputFormat
-
-import org.apache.spark._
-import org.apache.spark.Partitioner._
-import org.apache.spark.annotation.{DeveloperApi, Experimental}
+import org.apache.spark.Dependency
+import org.apache.spark.HashPartitioner
+import org.apache.spark.Logging
+import org.apache.spark.NarrowDependency
+import org.apache.spark.OneToOneDependency
+import org.apache.spark.Partition
+import org.apache.spark.Partitioner
+import org.apache.spark.Partitioner.defaultPartitioner
+import org.apache.spark.ShuffleDependency
+import org.apache.spark.SparkContext
+import org.apache.spark.SparkEnv
+import org.apache.spark.SparkException
+import org.apache.spark.TaskContext
+import org.apache.spark.WritableFactory
+import org.apache.spark.annotation.DeveloperApi
+import org.apache.spark.annotation.Experimental
 import org.apache.spark.api.java.JavaRDD
 import org.apache.spark.partial.BoundedDouble
 import org.apache.spark.partial.CountEvaluator
 import org.apache.spark.partial.GroupedCountEvaluator
 import org.apache.spark.partial.PartialResult
 import org.apache.spark.storage.StorageLevel
-import org.apache.spark.util.{BoundedPriorityQueue, Utils}
+import org.apache.spark.util
+import org.apache.spark.util.BoundedPriorityQueue
+import org.apache.spark.util.Utils
+import org.apache.spark.util.Utils.bytesToString
 import org.apache.spark.util.collection.OpenHashMap
-import org.apache.spark.util.random.{BernoulliSampler, PoissonSampler, BernoulliCellSampler,
-  SamplingUtils}
+import org.apache.spark.util.random.BernoulliCellSampler
+import org.apache.spark.util.random.BernoulliSampler
+import org.apache.spark.util.random.PoissonSampler
+import org.apache.spark.util.random.SamplingUtils
+
+import com.clearspring.analytics.stream.cardinality.HyperLogLogPlus
 
 /**
  * A Resilient Distributed Dataset (RDD), the basic abstraction in Spark. Represents an immutable,
