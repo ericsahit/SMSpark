@@ -155,7 +155,7 @@ private[spark] class TaskSchedulerImpl(
   }
   //提交一个Stage内的任务
   //在任务提交的同时会启动定时器，如果任务还未被执行，定时器持续发出警告直到任务被执行。
-  //同时会调用CoarseGrainedSchedulerBackend的reviveOffers()，而它则会通过actor向driver发送ReviveOffers，driver收到ReviveOffers后调用makeOffers()：
+  //同时会调用CoarseGrainedSchedulerBackend的reviveOffers()，而它则会通过actor向driver发送ReviveOffers消息，driver收到ReviveOffers后调用makeOffers()：
   override def submitTasks(taskSet: TaskSet) {
     val tasks = taskSet.tasks
     logInfo("Adding task set " + taskSet.id + " with " + tasks.length + " tasks")
@@ -220,11 +220,15 @@ private[spark] class TaskSchedulerImpl(
       .format(manager.taskSet.id, manager.parent.name))
   }
 
+  /**
+   * 对单个TaskSet进行分配资源
+   */
   private def resourceOfferSingleTaskSet(
-      taskSet: TaskSetManager,
-      maxLocality: TaskLocality,
-      shuffledOffers: Seq[WorkerOffer],
-      availableCpus: Array[Int],
+      taskSet: TaskSetManager, //TaskSet
+      maxLocality: TaskLocality, //本地性级别
+      shuffledOffers: Seq[WorkerOffer], //资源
+      availableCpus: Array[Int], //可用cpu
+      //返回值
       tasks: Seq[ArrayBuffer[TaskDescription]]) : Boolean = {
     var launchedTask = false
     for (i <- 0 until shuffledOffers.size) {//遍历每一个可用的executor
@@ -232,6 +236,7 @@ private[spark] class TaskSchedulerImpl(
       val host = shuffledOffers(i).host
       if (availableCpus(i) >= CPUS_PER_TASK) {//如果可用的cpu大于一个任务所需要的cpu数量
         try {
+          //匹配一个executor，host，locality最高的任务
           for (task <- taskSet.resourceOffer(execId, host, maxLocality)) {//具体的任务调度算法在resourceOffer方法中
             tasks(i) += task//可以调度到当前Executor的task列表
             val tid = task.taskId
@@ -260,14 +265,17 @@ private[spark] class TaskSchedulerImpl(
    * that tasks are balanced across the cluster.
    * 
    * 这个方法是调度Task的核心方法，选择了调度哪个Task到哪个Executor上
-   * WorkerOffer：可以调度到哪个worker上
+   * WorkerOffer：worker的可用资源
    * WorkerOffer：new WorkerOffer(id, executorData.executorHost, executorData.freeCores)
+   * 
+   * 返回：
+   * 能被调度的任务集
    */
   def resourceOffers(offers: Seq[WorkerOffer]): Seq[Seq[TaskDescription]] = synchronized {
     // Mark each slave as alive and remember its hostname
     // Also track if new executor is added
     var newExecAvail = false
-    for (o <- offers) {
+    for (o <- offers) { //更新executor映射
       executorIdToHost(o.executorId) = o.host
       activeExecutorIds += o.executorId
       if (!executorsByHost.contains(o.host)) {
@@ -286,11 +294,11 @@ private[spark] class TaskSchedulerImpl(
     //调度到每个节点上的任务
     val tasks = shuffledOffers.map(o => new ArrayBuffer[TaskDescription](o.cores))
     val availableCpus = shuffledOffers.map(o => o.cores).toArray
-    val sortedTaskSets = rootPool.getSortedTaskSetQueue
+    val sortedTaskSets = rootPool.getSortedTaskSetQueue //核心的得到排序的TaskSet队列
     for (taskSet <- sortedTaskSets) {
       logDebug("parentName: %s, name: %s, runningTasks: %s".format(
         taskSet.parent.name, taskSet.name, taskSet.runningTasks))
-      if (newExecAvail) {
+      if (newExecAvail) { // 如果有新的Executor出现，TaskSet需要重新计算本地性
         taskSet.executorAdded()
       }
     }

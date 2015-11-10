@@ -417,6 +417,7 @@ private[spark] class TaskSetManager(
    * would be adjusted by delay scheduling algorithm or it will be with a special
    * NO_PREF locality which will be not modified
    * 
+   * 传入executor，host，locality，对TaskSet进行一个本地性匹配，选出一个任务
    * 实际调度TaskSet内任务的方法，会有Delay Scheduling
    *
    * @param execId the executor Id of the offered resource

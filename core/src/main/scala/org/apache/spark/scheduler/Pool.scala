@@ -95,6 +95,9 @@ private[spark] class Pool(
     shouldRevive
   }
 
+  /**
+   * 得到按照FIFO/FIAR等算法排序后的TaskSet队列
+   */
   override def getSortedTaskSetQueue: ArrayBuffer[TaskSetManager] = {
     var sortedTaskSetQueue = new ArrayBuffer[TaskSetManager]
     val sortedSchedulableQueue =

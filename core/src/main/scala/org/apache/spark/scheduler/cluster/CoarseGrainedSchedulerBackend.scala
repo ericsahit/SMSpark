@@ -168,6 +168,8 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val actorSyste
       //Driver来给Executor分配任务，其中scheduler 就是 TaskSchedulerImpl
       //scheduler.resourceOffers()从从 FIFO 或者 Fair 调度器那里获得排序后的 TaskSetManager
       //并经过TaskSchedulerImpl.resourceOffer()，考虑 locality 等因素来确定 task 的全部信息 TaskDescription。
+      //WorkOffer指的是当前worker上的可用资源
+      //首先调用scheduler.resourceOffers 得到排序后的任务列表
       launchTasks(scheduler.resourceOffers(executorDataMap.map { case (id, executorData) =>
         new WorkerOffer(id, executorData.executorHost, executorData.freeCores)
       }.toSeq))
