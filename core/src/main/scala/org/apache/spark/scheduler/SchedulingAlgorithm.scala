@@ -30,6 +30,21 @@ private[spark] trait SchedulingAlgorithm {
   def comparator(s1: Schedulable, s2: Schedulable): Boolean
 }
 
+/**
+ * 
+每一次资源到来，进行任务调度的时候，每一次调度的时候，将所有的TaskSetManager进行排序，按照顺序来依次进行资源分配。
+
+在Fair模式下的排序比较算法：
+1）如果runningTasks1小于minshare1，那么task1优先执行，反之task2优先执行
+2）如果runningTasks1>mishare1 && runningTasks2>minshare2
+    定义minShareRatio1 = runningTasks1.toDouble / math.max(minShare1, 1.0).toDouble
+    比较minShareRatio，小的优先执行，也就是超出自己minShare比较少的优先执行
+3）如果runningTasks1<mishare1 && runningTasks2<minshare2
+    定义val taskToWeightRatio1 = runningTasks1.toDouble / s1.weight.toDouble
+    如果都没有超过自己的minShare，按么比较taskToWeightRatio1，小的优先执行，也就是权重比较大的优先执行
+    
+这个的效果，就是两个pool之间，task完成的比例会趋近于相同，最后基本一起达到100%
+ */
 private[spark] class FIFOSchedulingAlgorithm extends SchedulingAlgorithm {
   override def comparator(s1: Schedulable, s2: Schedulable): Boolean = {
     val priority1 = s1.priority
