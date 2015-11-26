@@ -92,6 +92,7 @@ private[spark] class RDDCheckpointData[T: ClassTag](@transient rdd: RDD[T])
     // Save to file, and reload it as an RDD
     val broadcastedConf = rdd.context.broadcast(
       new SerializableWritable(rdd.context.hadoopConfiguration))
+      //执行实际的job，将数据计算并且写入到checkpoint dir中
     rdd.context.runJob(rdd, CheckpointRDD.writeToFile[T](path.toString, broadcastedConf) _)
     val newRDD = new CheckpointRDD[T](rdd.context, path.toString)
     if (newRDD.partitions.size != rdd.partitions.size) {
@@ -104,6 +105,7 @@ private[spark] class RDDCheckpointData[T: ClassTag](@transient rdd: RDD[T])
     RDDCheckpointData.synchronized {
       cpFile = Some(path.toString)
       cpRDD = Some(newRDD)
+      //这里会把rdd的血统信息清除掉，所以上游的RDD是不会被checkpoint的，这里会有问题
       rdd.markCheckpointed(newRDD)   // Update the RDD's dependencies and partitions
       cpState = Checkpointed
     }
