@@ -9,7 +9,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.apache.commons.math3.exception.OutOfRangeException;
 
 /**
- * @author hwang
+ * @author Wang Haihua
  * 使用Shmget方式访问共享内存的接口
  * 在服务器端和客户端都需要使用到共享内存的接口
  */
@@ -52,7 +52,7 @@ public class ShmgetAccesser {
   
   private static ShmgetAccesser instance;
   
-  private static Object lockObj = new Object(); 
+  private static volatile Object lockObj = new Object();
   
   private ConcurrentHashMap<Integer, Integer> entryKey2indexKey;
   
@@ -71,6 +71,12 @@ public class ShmgetAccesser {
       System.loadLibrary("ShmgetAccesser.so");
   }
 
+    /**
+     * 初始化方法，对于worker和executor角色，初始化方法不同。
+     * worker：需要存储和管理本节点上的共享存储数据
+     * executor：通过存储接口，去读取共享存储中的数据
+     * @param type worker OR executor
+     */
   private ShmgetAccesser(String type) {
     if (type == "worker") {
       indexKeySet = new BitSet(MAX_CACHE_COUNT);

@@ -75,7 +75,7 @@ class BlockServerWorkerSuite extends FunSuite with BeforeAndAfter {
     
     val deamonWorker: Worker = null
     worker = actorSystem.actorOf(Props(new BlockServerWorkerActor(conf, deamonWorker)), "worker")
-    val clientId: BlockServerClientId = new BlockServerClientId("test", "localhost", 9999)
+    val clientId: BlockServerClientId = new BlockServerClientId("test", "localhost", 9999, "test-app")
     client = new BlockServerClient(clientId, worker, conf)
     val jvmId = Utils.getJvmId()
     println(jvmId)

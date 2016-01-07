@@ -9,21 +9,29 @@ import org.apache.spark.Logging
 import org.apache.spark.smstorage.sharedmemory.SMemoryManager
 
 /**
- * @author hwang
- * 管理本节点的存储空间
+ * 管理本节点的存储空间的逻辑使用情况的组件
  * entry对于每一个block都是唯一的，所以可以作为唯一区分的标志
+ * @param totalMemory
+ * @param smManager
+ * @author Wang Haihua
  */
 private[spark] class SpaceManager(
     var totalMemory: Long,
     smManager: SMemoryManager) extends Logging {
-  
+
+  /**
+   * 已经被使用的内存
+   */
   var usedMemory: Long = 0L
   
   /**
    * 节点当前所有Executor的JVM合计的最大内存
    */
   var totalExecutorMemory: Long = 0L
-  
+
+  /**
+   * 正在写或者释放的内存
+   */
   var pendingMemory: Long = 0L
   
   //private val peningEntries = new TimeStampedHashSet[String]

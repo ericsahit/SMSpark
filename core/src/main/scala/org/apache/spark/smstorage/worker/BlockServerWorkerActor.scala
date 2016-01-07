@@ -61,34 +61,51 @@ import org.apache.spark.deploy.worker.Worker
  * ****先不保证计算内存的最大使用？先保证计算内存的初始使用值。那么对于负载，需要使用特定的值。
  * 
  * 目前smspark使用到的参数：
- * spark.smspark.cmemoryFraction
+ * spark.smspark.cmemoryFraction 存储内存所占的比例
+ *
+ *
  */
 private[spark]
 class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
   extends Actor with ActorLogReceive with Logging {
-  
-  val smManager: SMemoryManager = new SMemoryManager()
-  
 
-  //
   /**
+   * 共享存储实现的管理组件
+   */
+  val smManager: SMemoryManager = new SMemoryManager()
+
+  /**
+   * 共享存储空间的逻辑管理组件
    * 初始内存，可以设定一个配置的值
-   * v1：先设定为集群内存*memoryFraction，即初始内存就设置相对应的值
+   * v1：先设定为集群内存*smemoryFraction，即初始内存就设置相对应的值
    * 初始内存=WorkerMemory * cmemoryFraction * safetyFraction
    * 最大可用内存不随着Executor生命周期的变化而变化
    */
-  val spaceManager: SpaceManager = new SpaceManager(getNodeMaxComputaionMemory(conf, worker.memory), smManager)
-  
+  val spaceManager: SpaceManager = new SpaceManager(getNodeMaxSMemory(conf, worker.memory), smManager)
+
+  /**
+   * 索引 Block 的组件
+   */
   val blockIndexer: BlockIndexer = new BlockIndexer()
-  
+
+  /**
+   * 监控 Executor 内存运行状况的组件
+   */
   val executorWatcher: ExecutorWatcher = new ExecutorWatcher(this, spaceManager, blockIndexer)
 
+  /**
+   * 保存连接到 BlockServerWorker 的客户端(Executor)，和对应的使用情况
+   */
   private val clientList = new mutable.HashMap[BlockServerClientId, BlockServerClientInfo]
   
-  //保存Block列表
+  /**
+   * Block列表，保存Id到Entry信息的映射
+   */
   private val blocks = new TimeStampedHashMap[SBlockId, SBlockEntry]
   
-  //保存Block位置，可能有多个Client。保存Block的位置可以表示有多少人在使用它
+  /**
+   * 保存BlockId到BlockServerClientId的映射，可能有多个Client在使用。保存Block的位置可以表示有多少人在使用它
+   */
   private val blockLocation = new JHashMap[SBlockId, mutable.HashSet[BlockServerClientId]]
   
   //保存被锁定的空间, entryId->SBlockEntry
@@ -96,10 +113,20 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
   private val pendingEntries = new TimeStampedHashMap[Int, SBlockEntry]
   
   //private val pendingClients = new TimeStampedHashMap[String, BlockServerClientId]
-  
+
+  /**
+   * 标志是否有第一个Executor连接到Worker
+   * 当第一个Executor连接之后开启ExecutorWatch任务
+   */
   private var isFirstExecutorConnected = false
-  
+
+  /**
+   * 检查Client是否过期的定时Task
+   */
   var timeoutCheckingTask: Cancellable = null
+  /**
+   * 监控Executor的定时Task
+   */
   var execWatchTask: Cancellable = null
   
   private val akkaTimeout = AkkaUtils.askTimeout(conf)
@@ -120,7 +147,7 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
     logInfo("Starting Spark BlockServerWorker")
     import context.dispatcher
     //定期运行监测client是否失去链接
-    //v1&v2：不需要过期检测了，数据与Executor不再耦合
+    //v1&v2：不需要过期检测，数据与Executor不再耦合
 //    timeoutCheckingTask = context.system.scheduler.schedule(
 //        0.seconds, 
 //        checkTimeoutInterval.milliseconds,
@@ -442,7 +469,7 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
   }
   
   /**
-   * 增加读Block的计数
+   * dan增加读Block的计数
    */
   def markReadBlock(sblockId: SBlockId, appName: String) {
     blockIndexer.getBlock(sblockId).map { entry =>
@@ -468,12 +495,18 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
     if (clientList.size > 0)
       executorWatcher.check(clientList)
   }
-  
-  private def getNodeMaxComputaionMemory(conf: SparkConf, workerMemory: Long): Long = {
-    val cmemoryFraction = conf.getDouble("spark.smspark.cmemoryFraction", 0.5)
+
+  /**
+   * 得到共享存储内存的最大容量
+   * @param conf SparkConf
+   * @param workerMemory worker节点的内存资源容量
+   * @return 共享存储内存的上限
+   */
+  private def getNodeMaxSMemory(conf: SparkConf, workerMemory: Long): Long = {
+    val smemoryFraction = conf.getDouble("spark.smspark.cmemoryFraction", 0.5)
     val safetyFraction = conf.getDouble("spark.storage.safetyFraction", 0.9) 
-    val cmemory = (workerMemory * cmemoryFraction * safetyFraction * 1024 * 1024).toLong
-    cmemory
+    val smemory = (workerMemory * smemoryFraction * safetyFraction * 1024 * 1024).toLong
+    smemory
   }
 }
 

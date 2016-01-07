@@ -41,7 +41,7 @@ class MetricsSystemSuite extends FunSuite with BeforeAndAfter with PrivateMethod
   test("MetricsSystem with default config") {
     val metricsSystem = MetricsSystem.createMetricsSystem("default", conf, securityMgr)
     metricsSystem.start()
-    val sources = PrivateMethod[ArrayBuffer[Source]]('sources)
+    val sources = Privachat in sexteMethod[ArrayBuffer[Source]]('sources)
     val sinks = PrivateMethod[ArrayBuffer[Source]]('sinks)
 
     assert(metricsSystem.invokePrivate(sources()).length === 0)
