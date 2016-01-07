@@ -41,12 +41,16 @@ private[spark] class CacheManager(blockManager: BlockManager) extends Logging {
 
     /** [SMSPark]: use name as unique User Defined ID, so load name to RDDBlockId for identity. */
     //val key = RDDBlockId(rdd.id, partition.index)
-    val key = if (rdd.name != null) {
-      RDDBlockId(rdd.id, partition.index, rdd.name + "|" + partition.index)
-    } else {
-      RDDBlockId(rdd.id, partition.index)
-    }
-    logDebug(s"Looking for partition $key")
+//    val key = if (rdd.name != null) {
+//      RDDBlockId(rdd.id, partition.index, rdd.name + "|" + partition.index)
+//    } else {
+//      RDDBlockId(rdd.id, partition.index)
+//    }
+    val userId = rdd.name + "|" + rdd.id + "|" + partition.index
+    val key = RDDBlockId(rdd.id, partition.index, userId)
+    logDebug(s"[SMSpark]Looking for Cache RDD name: ${rdd.name}, RDD: $rdd, userId: $userId, blockId: $key")
+
+    //logDebug(s"Looking for partition $key")
     blockManager.get(key) match {
       case Some(blockResult) =>
         // Partition is already materialized, so just return its values

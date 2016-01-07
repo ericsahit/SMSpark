@@ -4,6 +4,7 @@
 package org.apache.spark.smstorage.master
 
 import java.util.{HashMap => JHashMap}
+import scala.collection.JavaConversions._
 
 import org.apache.spark.deploy.master.Master
 import scala.collection.mutable
@@ -75,13 +76,30 @@ class BlockServerMaster(val master: Master) extends Logging {
    * 场景：在多个APP之间
    */
   def addBlock(workerId: String, newBlockEntry: SBlockEntry) {
+    logDebug(s"[SMSpark]: addBlock to bsMaster. from $workerId, block ${newBlockEntry.userDefinedId}")
     master.idToWorker.get(workerId) match {
       case Some(workerInfo) =>
         val uid = newBlockEntry.userDefinedId
+        logDebug(s"[SMSpark]: addBlock find workerInfo, so we will record the block.")
         //如果对应的Block存在
         sblocks.get(uid) match {
           case Some(oldBlockEntry) =>
             logWarning(s"[SMSpark]Got updateBlock to existed block $uid")
+
+            //添加Worker中的Block索引信息
+            workerInfo.addBlock(newBlockEntry)
+
+            //添加block的位置信息，Block是否会存在多个位置？在共享存储中应该是不会出现的
+            //Block may have multiply location for
+            var locations: mutable.HashSet[String] = null
+            if (sblockLocaion.containsKey(uid)) {
+              locations = sblockLocaion.get(uid)
+            } else {
+              locations = new mutable.HashSet[String]
+              sblockLocaion.put(uid, locations)
+            }
+            locations.add(workerId)
+
           case None =>
             //添加Block的索引信息
             sblocks += ((uid, newBlockEntry))
@@ -89,6 +107,7 @@ class BlockServerMaster(val master: Master) extends Logging {
             workerInfo.addBlock(newBlockEntry)
             
             //添加block的位置信息，Block是否会存在多个位置？在共享存储中应该是不会出现的
+            //Block may have multiply location for
             var locations: mutable.HashSet[String] = null
             if (sblockLocaion.containsKey(uid)) {
               locations = sblockLocaion.get(uid)
@@ -198,15 +217,35 @@ class BlockServerMaster(val master: Master) extends Logging {
    * 从Driver端获取BlockServerMaster中的缓存数据情况
    */
   def getLocations(blockId: SBlockId): Seq[String] = {
+    logDebug(s"[SMSpark]: getlocations block $blockId")
     if (sblockLocaion.containsKey(blockId.userDefinedId)) {
-      logDebug(s"[SMSpark]: Find location for block $blockId")
-      sblockLocaion.get(blockId.userDefinedId).map { workerId => master.idToWorker.get(workerId).get.host }.toSeq
+      logDebug(s"[SMSpark]: Find location for block $blockId: ")
+      sblockLocaion.get(blockId.userDefinedId).map { workerId =>
+        val host = master.idToWorker.get(workerId).get.host
+        logDebug(host)
+        host
+      }.toSeq
     }
     else
       Seq.empty
   }
   
   def getLocationMultipleSBlockId(sblockIds: Array[SBlockId]) : Seq[Seq[String]] = {
+
+    if (log.isDebugEnabled) {
+      sblockIds.map(block => logDebug(s"[SMSpark]: get location for block ${block.userDefinedId}"))
+
+      for (key <-sblockLocaion.keys) {
+        var locationsStr = ""
+
+        sblockLocaion.get(key).map(loc => locationsStr += loc + ", ")
+
+        logDebug(s"block $key has location: $locationsStr")
+      }
+    }
+
+
+
     sblockIds.map(sblockId => getLocations(sblockId))
   }
   

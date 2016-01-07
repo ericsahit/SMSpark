@@ -48,14 +48,15 @@ class SBlockId(
   //def rddDepId: Long
   
   override def toString = s"$userDefinedId,$localBlockId,$name"
-  override def hashCode = if (userDefinedId.isEmpty()) name.hashCode else userDefinedId.hashCode
+  //override def hashCode = if (userDefinedId.isEmpty() || userDefinedId.contains("noverifyuserid")) localBlockId.hashCode else userDefinedId.hashCode
+  override def hashCode = localBlockId.hashCode
   override def equals(other: Any): Boolean = other match {
     case o: SBlockId =>
-      if (!userDefinedId.isEmpty()) {
+      if (!userDefinedId.isEmpty() && !userDefinedId.contains("noverifyuserid") && !o.userDefinedId.contains("noverifyuserid")) {
         userDefinedId.equals(o.userDefinedId)
       } else {
-        name.equals(o.name) && localBlockId.equals(o.localBlockId)
-        //name == o.name
+        localBlockId.equals(o.localBlockId)
+        //name == o.name name.equals(o.name) &&
       }
 
   }
@@ -94,7 +95,8 @@ object SBlockId {
     
     val userId = rddBlockId.get.userDefinedId
     if (userId == null || userId.isEmpty()) {
-      new SBlockId(appName + "|" + rddBlockId.get.name, rddBlockId.get.name)
+      //new SBlockId(appName + "|" + rddBlockId.get.name, rddBlockId.get.name)
+      new SBlockId("|" + rddBlockId.get.name, rddBlockId.get.name)
     } else {
       new SBlockId(userId, rddBlockId.get.name)
     }

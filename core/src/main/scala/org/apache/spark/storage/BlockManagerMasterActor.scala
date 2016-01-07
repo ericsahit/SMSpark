@@ -418,11 +418,20 @@ class BlockManagerMasterActor(val isLocal: Boolean, conf: SparkConf, listenerBus
   /**
    * [SMSpark]
    */
-  private def getBlockManagerIdForHost(hosts: Array[String]): Seq[Seq[BlockManagerId]] = {
-    hosts.map { host =>
+  private def getBlockManagerIdForHost(hosts: Seq[Seq[String]]): Seq[Seq[BlockManagerId]] = {
+    logDebug(s"[SMSpark]: getBlockManagerIdForHost for all host list: $hosts")
+    val hostsToBlockManagerIds = hosts.map { hostArr =>
+      logDebug(s"[SMSpark]: getBlockManagerIdForHost for each list: $hostArr")
       val blockManagerIds = blockManagerInfo.keySet
-      blockManagerIds.filter { _.host == host }.toSeq
+      val filteredBlockManagerIds = blockManagerIds.filter { managerId =>
+        val ifContains = hostArr.contains(managerId.host)
+        logDebug(s"host list: $hostArr, blockManagerId: $managerId, blockManagerIdHost: ${managerId.host}, ifContains: $ifContains")
+        ifContains
+      }.toSeq
+      filteredBlockManagerIds
     }.toSeq
+    logDebug(s"[SMSpark]: After finding blockManagerIds, we find: $hostsToBlockManagerIds")
+    hostsToBlockManagerIds
   }
 
   /**

@@ -76,7 +76,7 @@ class BlockManagerMaster(
   }
   
     /** [SMSpark]: Get locations of multiple blockIds from the driver */
-  def getBlockManagerIdForHost(hosts: Array[String]): Seq[Seq[BlockManagerId]] = {
+  def getBlockManagerIdForHost(hosts: Seq[Seq[String]]): Seq[Seq[BlockManagerId]] = {
     askDriverWithReply[Seq[Seq[BlockManagerId]]](GetBlockManagerIdForHost(hosts))
   }
 
