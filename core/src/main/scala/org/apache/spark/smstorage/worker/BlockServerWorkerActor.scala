@@ -416,6 +416,7 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
       }
       
       //在clientInfo中去除Block的相关信息在JVM check时候有用
+      //block还是和executor有从属关系吗？
       clientList.get(clientId).map { client => 
         client.removeBlock(blockId)        
       }

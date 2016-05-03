@@ -183,6 +183,8 @@ private[spark] class Worker(
   
   /**
    * [SMSpark]: 向bsMaster发送异步消息
+   * 目前发送的消息类型有：
+   * ReqbsMasterRemoveBlock(worker.workerId, blockId) 删除一个RDD
    * bsMaster目前与Master共用一个Actor
    */
   def sendMasterBSMessage(message: Any) {

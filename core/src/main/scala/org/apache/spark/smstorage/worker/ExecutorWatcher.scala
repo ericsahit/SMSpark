@@ -69,6 +69,8 @@ private[spark] class ExecutorWatcher (
      * 这里使用一定的策略，把需要的参数传进去，进行选举。类似于MemoryStore中Block的替换
      * 可以参考任务调度时候FIFO和FAIR的机制，让迁移和替换的机制和策略分离
      *
+     * v3：实现计算的预测，按照预测值来进行内存之间的精准分配
+     *
      * currentTotalMemory = (computing memory sum) + (used Store Memory sum)
      * spaceManager.totalExecutorMemory = every Executor Max Memory sum
      */

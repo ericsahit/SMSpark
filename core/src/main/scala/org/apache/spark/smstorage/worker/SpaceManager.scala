@@ -20,7 +20,7 @@ private[spark] class SpaceManager(
     smManager: SMemoryManager) extends Logging {
 
   /**
-   * 已经被使用的内存
+   * 本节点的共享存储空间使用量
    */
   var usedMemory: Long = 0L
   

@@ -23,7 +23,7 @@ import org.apache.spark.{SecurityManager, SparkConf}
 import org.apache.spark.deploy.master.MasterSource
 import org.apache.spark.metrics.source.Source
 
-import com.codahale.metrics.MetricRegistry
+import com.codahale.metrics.{Gauge, MetricRegistry}
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -41,7 +41,7 @@ class MetricsSystemSuite extends FunSuite with BeforeAndAfter with PrivateMethod
   test("MetricsSystem with default config") {
     val metricsSystem = MetricsSystem.createMetricsSystem("default", conf, securityMgr)
     metricsSystem.start()
-    val sources = Privachat in sexteMethod[ArrayBuffer[Source]]('sources)
+    val sources = PrivateMethod[ArrayBuffer[Source]]('sources)
     val sinks = PrivateMethod[ArrayBuffer[Source]]('sinks)
 
     assert(metricsSystem.invokePrivate(sources()).length === 0)
@@ -183,5 +183,47 @@ class MetricsSystemSuite extends FunSuite with BeforeAndAfter with PrivateMethod
     // Even if spark.app.id and spark.executor.id are set, they are not used for the metric name.
     assert(metricName != s"$appId.$executorId.${source.sourceName}")
     assert(metricName === source.sourceName)
+  }
+
+  test("Metric with dynamic add") {
+    val source = new Source {
+      override val sourceName = "source: " + System.currentTimeMillis().toString
+      override val metricRegistry = new MetricRegistry()
+      metricRegistry.register(MetricRegistry.name("coresUsed"), new Gauge[Long] {
+        override def getValue: Long = System.currentTimeMillis()
+      })
+    }
+
+    val appId = "testId"
+    val executorId = "driver"
+    conf.set("spark.app.id", appId)
+    conf.set("spark.executor.id", executorId)
+
+    val instanceName = "driver"
+    val driverMetricsSystem = MetricsSystem.createMetricsSystem(instanceName, conf, securityMgr)
+
+    driverMetricsSystem.registerSource(source)
+    driverMetricsSystem.start()
+
+    Thread.sleep(1000*20)
+
+    val source2 = new Source {
+      override val sourceName = "source2: " + System.currentTimeMillis().toString
+      override val metricRegistry = new MetricRegistry()
+      metricRegistry.register(MetricRegistry.name("dynamic loading"), new Gauge[Long] {
+        override def getValue: Long = System.currentTimeMillis()
+      })
+    }
+
+    driverMetricsSystem.registerSource(source2)
+
+    Thread.sleep(1000*20)
+
+    driverMetricsSystem.removeSource(source)
+
+    Thread.sleep(1000*10000)
+
+    //val metricName = driverMetricsSystem.buildRegistryName(source)
+    //assert(metricName === s"$appId.$executorId.${source.sourceName}")
   }
 }
