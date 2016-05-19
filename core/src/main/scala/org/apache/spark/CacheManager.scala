@@ -17,6 +17,8 @@
 
 package org.apache.spark
 
+import org.apache.spark.smstorage.SBlockId
+
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
@@ -46,9 +48,10 @@ private[spark] class CacheManager(blockManager: BlockManager) extends Logging {
 //    } else {
 //      RDDBlockId(rdd.id, partition.index)
 //    }
-    val userId = rdd.name + "|" + rdd.id + "|" + partition.index
-    val key = RDDBlockId(rdd.id, partition.index, userId)
-    logDebug(s"[SMSpark]Looking for Cache RDD name: ${rdd.name}, RDD: $rdd, userId: $userId, blockId: $key")
+    val globalId = SBlockId.makeGlobalId(rdd, partition.index)
+
+    val key = RDDBlockId(rdd.id, partition.index, globalId)
+    logDebug(s"[SMSpark]Looking for Cache RDD name: ${rdd.name}, RDD: $rdd, globalId: $globalId, blockId: $key")
 
     //logDebug(s"Looking for partition $key")
     blockManager.get(key) match {

@@ -248,6 +248,8 @@ class LocalMemoryStore(
   }
 
   /**
+   * 返回一个Iterator，所以可以打开一个InputStream包装返回给调用者
+   * 然而目前的做法还是读入堆内存，再包装返回
    * Resolved：与BlockManager的功能相结合，是否getValues调用之前先调用contains方法？
    */
   override def getValues(blockId: BlockId): Option[Iterator[Any]] = {
@@ -276,6 +278,7 @@ class LocalMemoryStore(
         logWarning(s"Failed to fetch the block $blockId from SharedMemoryStore", ioe)
         None
     } finally {
+      is.close()
       //is.close()
     }
   }

@@ -44,21 +44,25 @@ private[spark] class SpaceManager(
    * 申请空间，如果成功，会锁定这块空间，并且返回共享存储空间的入口
    * TODO: 检查申请的kong
    */
-  def checkSpace(reqMemSize: Int): Option[Int] = {
+  def checkSpace(reqMemSize: Long): Option[Long] = {
     logInfo(s"ensureFreeSpace(${Utils.bytesToString(reqMemSize)}) called with curMem=${Utils.bytesToString(usedMemory)}, maxMem=${Utils.bytesToString(totalMemory)}")
     if (getAvailableMemory() < reqMemSize) {
-      logInfo(s"Will not store the block as it is larger than local memory limit")
-      None
+      logInfo(s"Will not store the block as it is larger than local memory limit, should evict some block")
+      Some(reqMemSize - getAvailableMemory())
     } else {
-      usedMemory += reqMemSize
-      Some(smManager.applySpace(reqMemSize));
+      None
     }
+  }
+
+  def allocateSpace(reqMemSize: Long): Int = {
+    usedMemory += reqMemSize
+    smManager.applySpace(reqMemSize.toInt)
   }
   
   /**
    * 释放共享存储空间
    */
-  def releaseSpace(entryId: Int, size: Int) {
+  def releaseSpace(entryId: Int, size: Long) {
     smManager.realseSpace(entryId);
     usedMemory -= size
   }

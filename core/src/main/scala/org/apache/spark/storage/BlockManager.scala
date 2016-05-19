@@ -104,6 +104,7 @@ private[spark] class BlockManager(
   private[spark] var sharedStore: LocalMemoryStore = null;
   private var shareMemoryInitialized = false
   private var bsMasterActor: ActorRef = null
+  private[spark] var appId: String = null
 
   private[spark]
   val externalShuffleServiceEnabled = conf.getBoolean("spark.shuffle.service.enabled", false)
@@ -222,7 +223,13 @@ private[spark] class BlockManager(
     
     /** [SMSPark]: init client and register to Block Server Worker. Executor reg, Driver not */
     if (conf.getBoolean("spark.smspark.enable", false) && bsWorker != null) {
-      
+
+      this.appId = if (conf.getBoolean("spark.smspark.datasharing.enable", false)) {
+        conf.get("spark.app.name", appId)
+      } else {
+        appId
+      }
+
       //TODO: 是否需要客户端的Actor？
 //      val slaveActor = actorSystem.actorOf(
 //        Props(new BlockManagerSlaveActor(this, mapOutputTracker)),
@@ -326,6 +333,9 @@ private[spark] class BlockManager(
   /**
    * Interface to get local block data. Throws an exception if the block cannot be found or
    * cannot be read successfully.
+   * [smspark]: 如果是远程获取block，的走的是此方法；
+   * 而在远程获取Block时，BlockId使用String传递，所以userDefinedId不能传递；
+   * 所以目前采用一个特殊的userDefinedId
    */
   override def getBlockData(blockId: BlockId): ManagedBuffer = {
     if (blockId.isShuffle) {
@@ -333,8 +343,8 @@ private[spark] class BlockManager(
     } else {
       var transBlockId = blockId
       if (transBlockId.isRDD) {
-        transBlockId = BlockId(blockId.name, "noverifyuserid")
-        logDebug(s"we transfer block ${SBlockId(blockId)} to sblock ${SBlockId(transBlockId)}")
+        transBlockId = BlockId(blockId.name, appId)
+        logDebug(s"[SMSpark]we transfer block ${SBlockId(blockId)} to sblock ${SBlockId(transBlockId)}")
       }
       val blockBytesOpt = doGetLocal(transBlockId, asBlockResult = false)
         .asInstanceOf[Option[ByteBuffer]]
@@ -471,7 +481,7 @@ private[spark] class BlockManager(
     val locationsSeq = master.getLocations(blockIds)
     logDebug(s"[SMSpark]: Get block locations from BlockManagerMaster: $locationsSeq")
     var locations = master.getLocations(blockIds).toArray
-    if (conf.getBoolean("spark.smspark.enable", false)) {
+    if (conf.getBoolean("spark.smspark.datasharing.enable", false)) {
       logInfo("[SMSpark]: Begin to find block from shared memory space.")
       var found = false
       locations.map(seq => if (!seq.isEmpty) found = true)
@@ -490,8 +500,8 @@ private[spark] class BlockManager(
       }
       
       if (bsMasterActor != null) {
-        val appName = conf.get("spark.app.name", "")
-        val sblocks = blockIds.map(blockId => SBlockId(blockId, appName))
+        //val appName = conf.get("spark.app.name", "")
+        val sblocks = blockIds.map(blockId => SBlockId(blockId))
         //先去bsMaster查询数据块的节点信息
         logDebug(s"[SMSpark]: Connecting to BlockServerMaster for message ReqbsMasterGetLocations ${sblocks.toSeq}.")
         val hosts = AkkaUtils.askWithReply[Seq[Seq[String]]](ReqbsMasterGetLocations(sblocks), bsMasterActor, timeout)
@@ -694,36 +704,43 @@ private[spark] class BlockManager(
   /**
    * [SMSpark]：从远程拉取的时候，会同时从共享存储空间查询Block是否存在
    * 如果共享存储空间查询存在，则会返回，但是没有注册到本Executor的BlockManager中
+   * [SMSpark:update] 增加了只有当datasharing功能开启时，才从共享内存空间中查找数据。
+   * 当datasharing功能未开启
    */
   private def doGetRemote(blockId: BlockId, asBlockResult: Boolean): Option[Any] = {
     require(blockId != null, "BlockId is null")
 
-    //[SMSpark:] first find SharedMemoryStore for block if block is RDDBlock and userDefinedId is not null
-    blockId.asRDDId.map { rddBlockId =>
-      //val userId = rddBlockId.userDefinedId
-      val userId = "now user defined id need not must exist."
-      if (userId != null) {
-        if (sharedStore.contains(blockId)) {//会去本节点和协调者的共享存储空间中查询
-          sharedStore.getBytes(blockId) match {
-            case Some(bytes) =>
-              logInfo(s"Found block $blockId($userId) from Shared Memory Store by userDefinedId")
-              if (!asBlockResult) {
-                return Some(bytes)
-              } else {
-                //使用Disk来代表从Shared Memory Store读入;
-                //TODO: [SMSpark]: Need Add new DataReadMethod.SMemory
-                return Some(new BlockResult(
-                  dataDeserialize(blockId, bytes), DataReadMethod.Disk, bytes.limit()))
-              }
+    //[SMSpark:Begin] first find SharedMemoryStore for block if block is RDDBlock and userDefinedId is not null
+    if (conf.getBoolean("spark.smspark.datasharing.enable", false)) {
 
-            case None =>
-              logDebug(s"Block $blockId not found in shared memory store")
+      blockId.asRDDId.map { rddBlockId =>
+        //val userId = rddBlockId.userDefinedId
+        val userId = "now user defined id need not must exist."
+        if (userId != null) {
+          if (sharedStore.contains(blockId)) {//会去本节点和协调者的共享存储空间中查询
+            sharedStore.getBytes(blockId) match {
+              case Some(bytes) =>
+                logInfo(s"Found block $blockId($userId) from Shared Memory Store by userDefinedId")
+                if (!asBlockResult) {
+                  return Some(bytes)
+                } else {
+                  //使用Disk来代表从Shared Memory Store读入;
+                  //TODO: [SMSpark]: Need Add new DataReadMethod.SMemory
+                  return Some(new BlockResult(
+                    dataDeserialize(blockId, bytes), DataReadMethod.Disk, bytes.limit()))
+                }
+
+              case None =>
+                logDebug(s"Block $blockId not found in shared memory store")
+            }
+          } else {
+            logDebug(s"Block $blockId not contains in shared memory store.")
           }
-        } else {
-          logDebug(s"Block $blockId not contains in shared memory store.")
         }
       }
+
     }
+    //[SMSpark:End]
 
     val locations = Random.shuffle(master.getLocations(blockId))
     for (loc <- locations) {
@@ -1343,6 +1360,9 @@ private[spark] class BlockManager(
   /**
    * Deserializes a ByteBuffer into an iterator of values and disposes of it when the end of
    * the iterator is reached.
+   * 这个方法是惰性的，会使用ByteBufferInputStream将ByteBuffer包装为一个Iterator[Any]
+   * 而dataSerialize方法是需要同步进行的，所以需要占用大量内存
+   * 在将数据占用
    */
   def dataDeserialize(
       blockId: BlockId,
@@ -1414,11 +1434,21 @@ private[spark] object BlockManager extends Logging {
     }
   }
 
+  /**
+   * [SMSpark] 根据blockId找到block所在的blockManager。
+   * smspark会根据coordinator保存的全局数据信息找到数据位置（需要smspark开启datasharing功能）
+   *
+   * @param blockIds
+   * @param env
+   * @param blockManagerMaster
+   * @return
+   */
   def blockIdsToBlockManagers(
       blockIds: Array[BlockId],
       env: SparkEnv,
       blockManagerMaster: BlockManagerMaster = null): Map[BlockId, Seq[BlockManagerId]] = {
 
+    // 实际使用中，blockManagerMaster会被set为env.blockManager.master，所以去掉这个判断条件也行
     // blockManagerMaster != null is used in tests
     assert(env != null || blockManagerMaster != null)
 //    val blockLocations: Seq[Seq[BlockManagerId]] = if (blockManagerMaster == null) {

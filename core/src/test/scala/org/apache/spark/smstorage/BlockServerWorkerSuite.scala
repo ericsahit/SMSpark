@@ -45,27 +45,6 @@ class BlockServerWorkerSuite extends FunSuite with BeforeAndAfter {
   
   //var writeBlockId: SBlockId = null
   
-  test("BlockId to SBlockId") {
-    val blockId = new RDDBlockId(1, 2)
-    val sblockId = SBlockId(blockId)//转换成的SBlock name为空
-    
-    assert(sblockId.name.isEmpty())
-    assert(!sblockId.userDefinedId.isEmpty())
-    assert(sblockId.localBlockId === "rdd_1_2")
-    
-    //assert(sblockId == SBlockId())
-    
-    
-    val blockId2 = new RDDBlockId(1, 2, "KMeansInput")
-    
-    val sblockId2 = SBlockId(blockId2)
-    assert(sblockId != sblockId2)
-    
-    val sblockId3 = new SBlockId("KMeansInput")
-    assert(sblockId3 == sblockId2)
-    
-    
-  }
   before {
     println("******************before test.")
     val securityManager: SecurityManager = new SecurityManager(conf)

@@ -20,6 +20,7 @@ package org.apache.spark.storage
 import java.util.UUID
 
 import org.apache.spark.annotation.DeveloperApi
+import org.apache.spark.smstorage.SBlockId
 
 /**
  * :: DeveloperApi ::
@@ -134,9 +135,18 @@ object BlockId {
       throw new IllegalStateException("Unrecognized BlockId: " + id)
   }
 
-  def apply(id: String, userId: String) = id match {
+  /**
+   * 生成带有globalBlockId的RDDBlockId
+   * 当远程传输block数据时候使用
+   * @param id
+   * @param appId
+   * @return
+   */
+  def apply(id: String, appId: String) = id match {
     case RDD(rddId, splitIndex) =>
-      RDDBlockId(rddId.toInt, splitIndex.toInt, userId + "|" + splitIndex)
+      RDDBlockId(rddId.toInt,
+        splitIndex.toInt,
+        SBlockId.mkGlobalBlockId2(appId, rddId.toInt, splitIndex.toInt))
     case _ =>
       throw new IllegalStateException("Unrecognized BlockId: " + id)
   }

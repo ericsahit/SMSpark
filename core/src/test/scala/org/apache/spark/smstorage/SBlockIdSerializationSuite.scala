@@ -4,11 +4,42 @@ import java.io.{ByteArrayOutputStream, ObjectOutputStream}
 
 import org.apache.spark.storage.RDDBlockId
 import org.scalatest.FunSuite
+import org.scalatest.Matchers
 
 /**
  * Created by hadoop on 5/15/15.
  */
-class SBlockIdSerializationSuite extends FunSuite {
+class SBlockIdSerializationSuite extends FunSuite with Matchers{
+
+  test("BlockId to SBlockId") {
+    val blockId = new RDDBlockId(1, 2)
+    val sblockId = SBlockId(blockId)//转换成的SBlock name为空
+
+
+    assert(sblockId.name.isEmpty())
+    assert(sblockId.userDefinedId == "##rdd_1_2")
+    assert(sblockId.rddId === "rdd_1_2")
+
+    val sblockIdEqual = new SBlockId("##rdd_1_2")
+    assert(sblockId == sblockIdEqual)
+
+    //none datasharing
+    val rddId = "spark-application-20160518001518"
+    val blockId2 = new RDDBlockId(1, 2, SBlockId.mkGlobalBlockId2(rddId, 1, 2, false))
+
+    val sblockId2 = SBlockId(blockId2)
+    assert(sblockId != sblockId2)
+
+    val sblockId3 = new SBlockId("spark-application-20160518001518#1#2")
+    assert(sblockId3 == sblockId2)
+
+    //datasharing
+    val rddName = "KMeansInput"
+    val blockIdDS = new RDDBlockId(1, 2, SBlockId.mkGlobalBlockId2(rddName, 1, 2, true))
+
+    blockIdDS.userDefinedId should be ("KMeansInput##2")
+
+  }
 
   test("Test block id can or not serializable") {
     val bid = RDDBlockId(1, 2, "kmeans_input")

@@ -8,6 +8,7 @@ import org.apache.spark.smstorage.SBlockId
 import org.apache.spark.smstorage.SBlockEntry
 import java.util.LinkedHashMap
 import org.apache.spark.smstorage.SBlockEntry
+import org.apache.spark.smstorage.migration.EvictDataChooseStrategy
 import org.apache.spark.util.TimeStampedHashMap
 import org.apache.spark.smstorage.SBlockEntry
 
@@ -17,8 +18,11 @@ import org.apache.spark.smstorage.SBlockEntry
  * v1: 还需要保存每个client下，Storage的使用情况
  *
  */
-private[spark] class BlockIndexer {
-  
+private[spark] class BlockIndexer(evictStrategy: EvictDataChooseStrategy) {
+
+  /**
+   * TODO: 对于这种场景，应该选用哪种Map？线程安全？并发高？CopyOnWrite？
+   */
   private val blockList = new TimeStampedHashMap[SBlockId, SBlockEntry]
   
   private var currentMemory = 0L
@@ -64,7 +68,7 @@ private[spark] class BlockIndexer {
 
     }
   }
-  
+
   /**
    * TODO：新建一个SBlockId
    * 这里生成的SBlockId，localId为空
@@ -73,7 +77,17 @@ private[spark] class BlockIndexer {
   private def createNewBlockId(entryId: Int, userDefinedId: String): SBlockId = {
     new SBlockId(userDefinedId, "", entryId.toString)
   }
-  
+
+  /**
+   * 选择被迁移的数据
+   * 当前时候，还没有生成SBlockId
+   * @param globalBlockId
+   * @return
+   */
+  def chooseEvictBlock(globalBlockId: String) = {
+    evictStrategy.choose(blockList.filter(!_._1.isSameRDD(globalBlockId)))
+  }
+
   
   def clear(f: (SBlockEntry) => Unit) {
     blockList.synchronized {

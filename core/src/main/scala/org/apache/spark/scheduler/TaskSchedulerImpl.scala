@@ -177,7 +177,7 @@ private[spark] class TaskSchedulerImpl(
       }
       hasReceivedTask = true
     }
-    backend.revivbeOffers()
+    backend.reviveOffers()
   }
 
   // Label as private[scheduler] to allow tests to swap in different task set managers if necessary

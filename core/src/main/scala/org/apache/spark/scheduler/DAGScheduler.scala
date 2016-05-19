@@ -22,6 +22,8 @@ import java.util.Properties
 import java.util.concurrent.{TimeUnit, Executors}
 import java.util.concurrent.atomic.AtomicInteger
 
+import org.apache.spark.smstorage.SBlockId
+
 import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet, Map, Stack}
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -106,6 +108,11 @@ class DAGScheduler(
    * All accesses to this map should be guarded by synchronizing on it (see SPARK-4454).
    */
   private val cacheLocs = new HashMap[Int, Array[Seq[TaskLocation]]]
+
+  /**
+   * [smspark]: 是否允许rdd共享
+   */
+  private val rddDataSharing = sc.getConf.getBoolean("spark.smspark.datasharing.enable", false)
 
   // For tracking failed nodes, we use the MapOutputTracker's epoch number, which is sent with
   // every task. When we detect a node failing, we note the current epoch number and failed
@@ -205,7 +212,8 @@ class DAGScheduler(
     // Note: this doesn't use `getOrElse()` because this method is called O(num tasks) times
     if (!cacheLocs.contains(rdd.id)) {
       logDebug(s"[SMSpark]Not in cacheLocs, we will find locations of each partition of RDD $rdd")
-      val blockIds = rdd.partitions.indices.map(index => RDDBlockId(rdd.id, index, rdd.name + "|" + rdd.id + "|" + index)).toArray[BlockId]
+      val blockIds = rdd.partitions.indices.map(index =>
+        RDDBlockId(rdd.id, index, SBlockId.makeGlobalId(rdd, index, rddDataSharing))).toArray[BlockId]
       val locs = BlockManager.blockIdsToBlockManagers(blockIds, env, blockManagerMaster)
       cacheLocs(rdd.id) = blockIds.map { id =>
         locs.getOrElse(id, Nil).map(bm => TaskLocation(bm.host, bm.executorId))

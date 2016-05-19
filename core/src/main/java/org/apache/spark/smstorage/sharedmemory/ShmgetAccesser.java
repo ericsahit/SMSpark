@@ -50,9 +50,9 @@ public class ShmgetAccesser {
   //private static final String SM_NAME = "/home/hadoop/develop/lib";
   private static final String SM_NAME = "/data/hadoopspark";
   
-  private static ShmgetAccesser instance;
+  private static volatile ShmgetAccesser instance;
   
-  private static volatile Object lockObj = new Object();
+  private static Object lockObj = new Object();
   
   private ConcurrentHashMap<Integer, Integer> entryKey2indexKey;
   

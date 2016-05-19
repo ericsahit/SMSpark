@@ -29,6 +29,8 @@ private[spark] object BlockServerMessages {
   case class ReqbsMasterRemoveBlock(workerId: String, blockEntry: SBlockId) extends BlockServerWorkerToMaster
   //Driver向bsMaster请求Block的位置，查询是否存在已有的缓存数据
   case class ReqbsMasterGetLocations(blockIds: Array[SBlockId]) extends BlockServerWorkerToMaster
+
+  case class MigrateDestination(workerId: String, host: String, port: Int)
   
   //////////////////////////////////////////////////////////////////////////////////
   // Messages from the worker to client.

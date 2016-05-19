@@ -76,9 +76,11 @@ private[spark] class SBlockEntry (
       visitLocalCount += 1;
     else
       visitRemoteCount += 1;
-    if (!usingApps.contains(appName))
+    if (!usingApps.contains(appName)) {
+      usingApps += appName
       visitAppCount += 1;
-    usingApps += appName
+    }
+
   }
   
   /**

@@ -4,6 +4,7 @@
 package org.apache.spark.smstorage.worker
 
 import java.util.{HashMap => JHashMap}
+import org.apache.spark.smstorage.migration._
 import scala.collection.{mutable, immutable}
 import scala.collection.JavaConversions._
 import scala.concurrent.duration._
@@ -16,6 +17,8 @@ import akka.actor.{Actor, ActorRef, Cancellable}
 import org.apache.spark.util.{ActorLogReceive, AkkaUtils, Utils, TimeStampedHashMap}
 import org.apache.spark.smstorage.sharedmemory.SMemoryManager
 import org.apache.spark.deploy.worker.Worker
+
+import scala.util.{Try, Failure, Success}
 
 /**
  * @author hwang
@@ -61,8 +64,8 @@ import org.apache.spark.deploy.worker.Worker
  * ****先不保证计算内存的最大使用？先保证计算内存的初始使用值。那么对于负载，需要使用特定的值。
  * 
  * 目前smspark使用到的参数：
- * spark.smspark.cmemoryFraction 存储内存所占的比例
- *
+ * spark.smspark.cmemoryFraction 共享内存空间所占的比例
+ * spark.smspark.safetyFraction 共享内存空间使用安全比例
  *
  */
 private[spark]
@@ -83,10 +86,20 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
    */
   val spaceManager: SpaceManager = new SpaceManager(getNodeMaxSMemory(conf, worker.memory), smManager)
 
+  val isMigrationEnabled = conf.getBoolean("spark.smspark.evict.migrationenable", false)
+
+  val strategy: EvictDataChooseStrategy =
+    if (conf.get("spark.smspark.evict.strategy", "LRU").toUpperCase() == "LW") {
+      new LinearWeightingStrategy(conf, GlobalStatistic(appTotalCount, totalVisitCount))
+    }
+    else {
+      new LRUStrategy()
+    }
+
   /**
    * 索引 Block 的组件
    */
-  val blockIndexer: BlockIndexer = new BlockIndexer()
+  val blockIndexer: BlockIndexer = new BlockIndexer(strategy)
 
   /**
    * 监控 Executor 内存运行状况的组件
@@ -133,7 +146,7 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
   
   val checkTimeoutInterval = conf.getLong("spark.storage.blockManagerTimeoutIntervalMs", 60000)
   
-  val checkExecWatchInterval = conf.getLong("spark.smstorage.executorWatchIntervalMs", 5000)
+  val checkExecWatchInterval = conf.getLong("spark.smspark.executorWatchIntervalMs", 5000)
   
   //////////////////////////////////////////////////////////////////////////////////
   // 统计本节点的一些使用信息
@@ -142,6 +155,8 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
    * 统计历史访问过数据块的应用Executor个数
    */
   var appTotalCount: Int = 0
+
+  var totalVisitCount: Long = 0l
   
   override def preStart() {
     logInfo("Starting Spark BlockServerWorker")
@@ -224,7 +239,7 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
   }
   
   /**
-   * 注册客户端
+   * 客户端bsClient向bsWorker注册
    * 新增：
    * 1）当第一个Executor连接之后开启ExecutorWatch任务
    * 2）向bsMaster更新存储内存的使用信息
@@ -252,8 +267,9 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
       //spaceManager.totalMemory += maxMemSize
       
       //Master这里更新Total的存储内存信息
-      if (worker != null)
-        worker.sendMasterBSMessage(ReqbsMasterUpdateSMemory(worker.workerId, spaceManager.totalMemory, spaceManager.usedMemory))
+      //取消了向bsMaster发送内存使用变化消息，因为这里内存使用没有发生变化
+      //if (worker != null)
+        //worker.sendMasterBSMessage(ReqbsMasterUpdateSMemory(worker.workerId, spaceManager.totalMemory, spaceManager.usedMemory))
       
       logInfo("Registering block server client %s with %s RAM, %s Max JVM RAM, JVMID %d, %s".format(
         id.hostPort, Utils.bytesToString(maxMemSize), Utils.bytesToString(maxJvmMemSize), jvmId, id))
@@ -285,24 +301,31 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
     if (client.isEmpty) {//如果客户端没有注册，则报错，拒绝添加Block
       return None
     }
-    
+    logDebug(s"Begin to request space for $userDefinedId, size: $size")
     //TODO: [多线程访问控制]申请存储空间时候可能已经有其他客户端开始写入操作
     //通过查看client的blocks(已经写成功)，和pendingEntries(正在写)来确定
-    
-    spaceManager.checkSpace(size.toInt) match {
-      case Some(entryId) => //如果本地有足够的存储空间
-        val entry = new SBlockEntry(userDefinedId, entryId, size, true)
-        pendingEntries.put(entryId, entry)
-        
-        Some(entry)
-        
-      case None => //本地空间不足，需要进行节点迁移，或者远程分配空间，或者返回错误TODO
-        val remoteAddress = ""
-        val remoteEntry = new SBlockEntry(userDefinedId, 0, size, false)
-        //Some(remoteEntry)
-        None
+    var spaceAfterEvict = 0L
+    spaceManager.checkSpace(size) match {
+      case None => //如果本地有足够的存储空间
+
+      case Some(needSpace) => //本地空间不足，需要进行节点迁移，或者远程分配空间，或者返回错误TODO
+        logDebug(s"Not enough space, will migrate or evict some block.")
+        spaceAfterEvict = doDataMigrateOrEvict(userDefinedId, needSpace)
     }
 
+    //Double check，确保空间的充足
+    //assert(spaceManager.checkSpace(size).isEmpty)
+
+    if (spaceAfterEvict <= 0) { //有充足空间，或通过迁移替换得到充足空间
+      logDebug(s"Got enough space.")
+      val entryId = spaceManager.allocateSpace(size)
+      val entry = new SBlockEntry(userDefinedId, entryId, size, true)
+      pendingEntries.put(entryId, entry)
+      Some(entry)
+    } else {
+      logDebug(s"Not got enough space after store failed.")
+      None
+    }
   }
   
   /**
@@ -331,13 +354,14 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
           }
 
           //Master这里发送AddBlock异步消息，userDefinedId作为唯一id
+          //TODO: 应该上传blockid信息，如何确定远程的block信息
           if (worker != null)
             worker.sendMasterBSMessage(ReqbsMasterAddBlock(worker.workerId, entry))
           
           logInfo(s"Block $blockId clientId: $clientId, entryid: $entryId, Write block result successfully")
           Some(blockId)
         } else {//客户端写结果失败
-          spaceManager.releaseSpace(entryId, entry.size.toInt)
+          spaceManager.releaseSpace(entryId, entry.size)
           logWarning(s"ClientId: $clientId, entry: $entryId, Write block result failed")
           None
         }
@@ -346,7 +370,7 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
         logWarning(s"Pending entry $entryId has been removed, write block failed")
         None
     }
-    
+
   }
   
   /**
@@ -423,15 +447,13 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
       
     }
   }
-  
+
   /**
    * Executor关闭的时候调用
-   * TODO：清除所有属于当前Client的Block吗？还是先保留一段时间，过一段时间再做删除操作。
-   * 当前做法：
+   * 当前做法v1:
    * 先加入到toRemove队列中，然后由每隔一段时间进行扫描，过一定时间则进行删除
    * 当前时间是否需要先把SpaceManager中的空间释放？不需要，因为物理空间没变。
-   * 
-   * v1:
+   *
    * v2: Executor完毕时候，并不删除缓存数据，数据生命周期与Executor脱离
    */
   def unregClient(clientId: BlockServerClientId) {
@@ -464,17 +486,115 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
       removeBlock(clientId, blockId)
     }
   }
-  
+
+
+  /**
+   * 向Coordinator报告Block状态，包含被删除
+   * @param clientId
+   * @param blockId
+   */
   def updateBlockStatus(clientId: BlockServerClientId, blockId: SBlockId) {
-    
+    //worker.sendMasterBSMessage()
   }
   
   /**
    * dan增加读Block的计数
+   * TODO: 客户端缓存的读取是否算数
    */
   def markReadBlock(sblockId: SBlockId, appName: String) {
     blockIndexer.getBlock(sblockId).map { entry =>
       entry.markReadBlock(appName)
+    }
+  }
+
+  /**
+   * 执行数据迁移或替换
+   * TODO:数据迁移或者替换，最终仍然可能不能产生足够的空间吗？可能，如果都是同一个RDD下的block
+   * 所以应该返回true OR false
+   * 1.chooseEvictBlock
+   * 2.chooseDestination
+   * 3.doMigrate
+   * 4.doEvict
+   */
+  private def doDataMigrateOrEvict(userDefinedId: String, need: Long) = {
+
+    var needSpace = need
+
+    val evcitList = blockIndexer.chooseEvictBlock(userDefinedId)
+    while (needSpace > 0 && evcitList.size > 0) {
+      val (id, block) = evcitList.remove(0)
+
+      if (isMigrationEnabled) {
+
+        chooseDestination(block) match {
+          case Some(dest) =>
+            logDebug(s"Trying to migrate $block to $dest.")
+            doMigrate(block, dest) match {
+              case Success(_) =>
+                logDebug(s"Migrated $block to $dest successfully.")
+              case Failure(ex) =>
+                logDebug(s"Failed to migrate $block to $dest. reason: $ex, Try to evict " + block + " from Shared space.")
+            }
+
+          case None =>
+            logDebug("Try to evict " + block + " from Shared space.")
+        }
+
+      }
+
+      doEvict(id)
+      needSpace = needSpace - block.size
+    }
+    needSpace
+  }
+
+  /**
+   * 向bsMaster发送请求，选择合适的目标迁移节点
+   * @param block
+   * @return
+   */
+  private def chooseDestination(block: SBlockEntry) = {
+
+    Option(MigrateDestination("", "127.0.0.1", 10075))
+  }
+
+  /**
+   * TODO: implement data migrate
+   * @param block
+   * @param dest
+   * @return
+   */
+  private def doMigrate(block: SBlockEntry, dest: MigrateDestination) = {
+
+    //和Spark内存管理中的数据传输方法一致
+    Try {
+
+    }
+
+  }
+
+  /**
+   * 删除Block
+   * @param blockId
+   * @return
+   */
+  private def doEvict(blockId: SBlockId) = {
+    //从BlockIndexer中删除
+    blockIndexer.removeBlock(blockId) match {
+
+      case Some(entry) =>
+        logDebug(s"Trying to evict $blockId.")
+        //通知SpaceManager删除，释放空间
+        spaceManager.releaseSpace(entry.entryId, entry.size.toInt)
+        logInfo(s"Evicted block($blockId) success from shared memory.")
+
+        //通知bsMaster发送删除Block信息
+        if (worker != null)
+          worker.sendMasterBSMessage(ReqbsMasterRemoveBlock(worker.workerId, blockId))
+
+      case None =>
+        logWarning("Try to evict " + blockId + " which not exists in shared space.")
+
     }
   }
   
@@ -504,8 +624,8 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
    * @return 共享存储内存的上限
    */
   private def getNodeMaxSMemory(conf: SparkConf, workerMemory: Long): Long = {
-    val smemoryFraction = conf.getDouble("spark.smspark.cmemoryFraction", 0.5)
-    val safetyFraction = conf.getDouble("spark.storage.safetyFraction", 0.9) 
+    val smemoryFraction = conf.getDouble("spark.smspark.smemoryFraction", 0.5)
+    val safetyFraction = conf.getDouble("spark.smspark.safetyFraction", 0.9)
     val smemory = (workerMemory * smemoryFraction * safetyFraction * 1024 * 1024).toLong
     smemory
   }
