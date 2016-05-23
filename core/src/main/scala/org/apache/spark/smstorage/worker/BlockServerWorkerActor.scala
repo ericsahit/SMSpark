@@ -5,6 +5,7 @@ package org.apache.spark.smstorage.worker
 
 import java.util.{HashMap => JHashMap}
 import org.apache.spark.smstorage.migration._
+import scala.collection.mutable.ArrayBuffer
 import scala.collection.{mutable, immutable}
 import scala.collection.JavaConversions._
 import scala.concurrent.duration._
@@ -84,9 +85,28 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
    * 初始内存=WorkerMemory * cmemoryFraction * safetyFraction
    * 最大可用内存不随着Executor生命周期的变化而变化
    */
-  val spaceManager: SpaceManager = new SpaceManager(getNodeMaxSMemory(conf, worker.memory), smManager)
+  val initSpaceMemory: Long = if (worker == null) {// for test
+    conf.get("spark.smspark.initcachedspace").toLong
+  } else {
+    getNodeMaxSMemory(conf, worker.memory)
+  }
+  val spaceManager: SpaceManager = new SpaceManager(initSpaceMemory, smManager)
 
-  val isMigrationEnabled = conf.getBoolean("spark.smspark.evict.migrationenable", false)
+  //val spaceManager: SpaceManager = new SpaceManager(getNodeMaxSMemory(conf, worker.memory), smManager)
+
+  /**
+   * is data migration enable
+   * if not enable, data will be abondoned if be evicted
+   * if enable, data will be first tried to migrate to remote Cached Space if be evicted
+   */
+  val isMigrationEnabled = conf.getBoolean("spark.smspark.evict.migration.enable", false)
+
+  /**
+   * is dynamic allocation enable
+   * if not enable, totalCachedSpaceMemory will always be init size
+   * if enable, totalCachedSpaceMemory will be dynamically ajusted by the Temporal Space Size
+   */
+  val isDynamicAllocationEnabled = conf.getBoolean("spark.smspark.da.enable", false)
 
   val strategy: EvictDataChooseStrategy =
     if (conf.get("spark.smspark.evict.strategy", "LRU").toUpperCase() == "LW") {
@@ -146,7 +166,7 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
   
   val checkTimeoutInterval = conf.getLong("spark.storage.blockManagerTimeoutIntervalMs", 60000)
   
-  val checkExecWatchInterval = conf.getLong("spark.smspark.executorWatchIntervalMs", 5000)
+  val checkExecWatchInterval = conf.getLong("spark.smspark.da.executorCheckIntervalMs", 2000)
   
   //////////////////////////////////////////////////////////////////////////////////
   // 统计本节点的一些使用信息
@@ -246,7 +266,7 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
    */
   def registerClient(id: BlockServerClientId, maxJvmMemSize: Long, maxMemSize: Long, jvmId: Int, clientActor: ActorRef) = {
     
-    if (!isFirstExecutorConnected) {//当第一个Executor连接之后开启ExecutorWatch任务
+    if (isDynamicAllocationEnabled && !isFirstExecutorConnected) {//当第一个Executor连接之后开启ExecutorWatch任务
       isFirstExecutorConnected = true
 
       import context._
@@ -309,8 +329,12 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
       case None => //如果本地有足够的存储空间
 
       case Some(needSpace) => //本地空间不足，需要进行节点迁移，或者远程分配空间，或者返回错误TODO
-        logDebug(s"Not enough space, will migrate or evict some block.")
-        spaceAfterEvict = doDataMigrateOrEvict(userDefinedId, needSpace)
+        if (needSpace < 0) { //Try store block size > totalMemory, will not evict and directly return.
+          spaceAfterEvict = size
+        } else {
+          logDebug(s"Not enough space, will migrate or evict some block.")
+          spaceAfterEvict = doDataMigrateOrEvict(userDefinedId, needSpace)
+        }
     }
 
     //Double check，确保空间的充足
@@ -323,7 +347,7 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
       pendingEntries.put(entryId, entry)
       Some(entry)
     } else {
-      logDebug(s"Not got enough space after store failed.")
+      logDebug(s"Not got enough space after evict or totalMemory. needSpace: " + spaceAfterEvict)
       None
     }
   }
@@ -520,9 +544,9 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
 
     var needSpace = need
 
-    val evcitList = blockIndexer.chooseEvictBlock(userDefinedId)
-    while (needSpace > 0 && evcitList.size > 0) {
-      val (id, block) = evcitList.remove(0)
+    val evictList = blockIndexer.chooseEvictBlock(userDefinedId)
+
+    evictList.forall { case (id, block) =>
 
       if (isMigrationEnabled) {
 
@@ -544,7 +568,10 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
 
       doEvict(id)
       needSpace = needSpace - block.size
+
+      needSpace > 0
     }
+
     needSpace
   }
 

@@ -150,6 +150,11 @@ abstract class RDD[T: ClassTag](
   }
 
   /**
+   * [smspark]:
+   */
+  val internalAppId = _sc.applicationId
+
+  /**
    * Set this RDD's storage level to persist its values across operations after the first time
    * it is computed. This can only be used to assign a new storage level if the RDD does not
    * have a storage level set yet..

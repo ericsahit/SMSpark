@@ -32,11 +32,80 @@ main:
 [INFO] --- scala-maven-plugin:3.2.0:compile (scala-compile-first) @ spark-core_2.10 ---
 [INFO] Using zinc server for incremental compilation
 [INFO] compiler plugin: BasicArtifact(org.scalamacros,paradise_2.10.4,2.0.1,null)
-[0m[[0minfo[0m] [0mCompiling 4 Scala sources and 32 Java sources to /home/hadoop/develop/spark/core/target/scala-2.10/classes...[0m
+[0m[[0minfo[0m] [0mCompiling 437 Scala sources and 44 Java sources to /home/hadoop/develop/spark/core/target/scala-2.10/classes...[0m
+[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/scheduler/local/LocalBackend.scala:89: postfix operator millis should be enabled[0m
+[0m[[33mwarn[0m] [0mby making the implicit value scala.language.postfixOps visible.[0m
+[0m[[33mwarn[0m] [0mThis can be achieved by adding the import clause 'import scala.language.postfixOps'[0m
+[0m[[33mwarn[0m] [0mor by setting the compiler option -language:postfixOps.[0m
+[0m[[33mwarn[0m] [0mSee the Scala docs for value scala.language.postfixOps for a discussion[0m
+[0m[[33mwarn[0m] [0mwhy the feature should be explicitly enabled.[0m
+[0m[[33mwarn[0m] [0m      context.system.scheduler.scheduleOnce(1000 millis, self, ReviveOffers)[0m
+[0m[[33mwarn[0m] [0m                                                 ^[0m
+[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/util/MutableURLClassLoader.scala:26: imported `ParentClassLoader' is permanently hidden by definition of class ParentClassLoader in package util[0m
+[0m[[33mwarn[0m] [0mimport org.apache.spark.util.ParentClassLoader[0m
+[0m[[33mwarn[0m] [0m                             ^[0m
+[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/TaskState.scala:41: match may not be exhaustive.[0m
+[0m[[33mwarn[0m] [0mIt would fail on the following input: TASK_ERROR[0m
+[0m[[33mwarn[0m] [0m  def fromMesos(mesosState: MesosTaskState): TaskState = mesosState match {[0m
+[0m[[33mwarn[0m] [0m                                                         ^[0m
+[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/SparkContext.scala:623: constructor Job in class Job is deprecated: see corresponding Javadoc for more information.[0m
+[0m[[33mwarn[0m] [0m    val job = new NewHadoopJob(hadoopConfiguration)[0m
+[0m[[33mwarn[0m] [0m              ^[0m
+[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/SparkContext.scala:669: constructor Job in class Job is deprecated: see corresponding Javadoc for more information.[0m
+[0m[[33mwarn[0m] [0m    val job = new NewHadoopJob(hadoopConfiguration)[0m
+[0m[[33mwarn[0m] [0m              ^[0m
+[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/SparkContext.scala:845: constructor Job in class Job is deprecated: see corresponding Javadoc for more information.[0m
+[0m[[33mwarn[0m] [0m    val job = new NewHadoopJob(conf)[0m
+[0m[[33mwarn[0m] [0m              ^[0m
+[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/SparkHadoopWriter.scala:201: constructor TaskID in class TaskID is deprecated: see corresponding Javadoc for more information.[0m
+[0m[[33mwarn[0m] [0m        new TaskAttemptID(new TaskID(jID.value, true, splitID), attemptID))[0m
+[0m[[33mwarn[0m] [0m                          ^[0m
+[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/SparkHadoopWriter.scala:222: method makeQualified in class Path is deprecated: see corresponding Javadoc for more information.[0m
+[0m[[33mwarn[0m] [0m    outputPath.makeQualified(fs)[0m
+[0m[[33mwarn[0m] [0m               ^[0m
+[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/deploy/SparkHadoopUtil.scala:197: method isDir in class FileStatus is deprecated: see corresponding Javadoc for more information.[0m
+[0m[[33mwarn[0m] [0m      val (directories, leaves) = fs.listStatus(path).partition(_.isDir)[0m
+[0m[[33mwarn[0m] [0m                                                                  ^[0m
+[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/deploy/SparkHadoopUtil.scala:202: method isDir in class FileStatus is deprecated: see corresponding Javadoc for more information.[0m
+[0m[[33mwarn[0m] [0m    if (baseStatus.isDir) recurse(basePath) else Array(baseStatus)[0m
+[0m[[33mwarn[0m] [0m                   ^[0m
+[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/deploy/history/FsHistoryProvider.scala:111: method isDir in class FileStatus is deprecated: see corresponding Javadoc for more information.[0m
+[0m[[33mwarn[0m] [0m    if (!fs.getFileStatus(path).isDir) {[0m
+[0m[[33mwarn[0m] [0m                                ^[0m
+[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/deploy/history/FsHistoryProvider.scala:318: method isDir in class FileStatus is deprecated: see corresponding Javadoc for more information.[0m
+[0m[[33mwarn[0m] [0m  private def isLegacyLogDirectory(entry: FileStatus): Boolean = entry.isDir()[0m
+[0m[[33mwarn[0m] [0m                                                                       ^[0m
+[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/input/PortableDataStream.scala:49: method isDir in class FileStatus is deprecated: see corresponding Javadoc for more information.[0m
+[0m[[33mwarn[0m] [0m      if (file.isDir) 0L else file.getLen[0m
+[0m[[33mwarn[0m] [0m               ^[0m
+[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/input/WholeTextFileInputFormat.scala:57: method isDir in class FileStatus is deprecated: see corresponding Javadoc for more information.[0m
+[0m[[33mwarn[0m] [0m      if (file.isDir) 0L else file.getLen[0m
+[0m[[33mwarn[0m] [0m               ^[0m
+[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/mapred/SparkHadoopMapRedUtil.scala:56: constructor TaskAttemptID in class TaskAttemptID is deprecated: see corresponding Javadoc for more information.[0m
+[0m[[33mwarn[0m] [0m    new TaskAttemptID(jtIdentifier, jobId, isMap, taskId, attemptId)[0m
+[0m[[33mwarn[0m] [0m    ^[0m
+[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/rdd/CheckpointRDD.scala:111: method getDefaultReplication in class FileSystem is deprecated: see corresponding Javadoc for more information.[0m
+[0m[[33mwarn[0m] [0m      fs.create(tempOutputPath, false, bufferSize, fs.getDefaultReplication, blockSize)[0m
+[0m[[33mwarn[0m] [0m                                                      ^[0m
+[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/rdd/HadoopRDD.scala:351: constructor TaskID in class TaskID is deprecated: see corresponding Javadoc for more information.[0m
+[0m[[33mwarn[0m] [0m    val taId = new TaskAttemptID(new TaskID(jobID, true, splitId), attemptId)[0m
+[0m[[33mwarn[0m] [0m                                 ^[0m
+[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/rdd/PairRDDFunctions.scala:898: constructor Job in class Job is deprecated: see corresponding Javadoc for more information.[0m
+[0m[[33mwarn[0m] [0m    val job = new NewAPIHadoopJob(hadoopConf)[0m
+[0m[[33mwarn[0m] [0m              ^[0m
+[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/rdd/PairRDDFunctions.scala:966: constructor Job in class Job is deprecated: see corresponding Javadoc for more information.[0m
+[0m[[33mwarn[0m] [0m    val job = new NewAPIHadoopJob(hadoopConf)[0m
+[0m[[33mwarn[0m] [0m              ^[0m
+[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/scheduler/InputFormatInfo.scala:106: constructor Job in class Job is deprecated: see corresponding Javadoc for more information.[0m
+[0m[[33mwarn[0m] [0m    val job = new Job(conf)[0m
+[0m[[33mwarn[0m] [0m              ^[0m
+[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/worker/ExecutorWatcher.scala:117: comparing values of types Unit and Null using `!=' will always yield true[0m
+[0m[[33mwarn[0m] [0m      while ((line = reader.readLine()) != null) {[0m
+[0m[[33mwarn[0m] [0m                                        ^[0m
+[0m[[33mwarn[0m] [0m21 warnings found[0m
 [0m[[33mwarn[0m] [0mwarning: [options] bootstrap class path not set in conjunction with -source 1.6[0m
 [0m[[33mwarn[0m] [0m1 warning[0m
-[0m[[0minfo[0m] [0mCompiling 42 Scala sources to /home/hadoop/develop/spark/core/target/scala-2.10/classes...[0m
-[0m[[0minfo[0m] [0mCompile success at Aug 11, 2015 10:10:43 AM [2:00.632s][0m
+[0m[[0minfo[0m] [0mCompile success at May 22, 2016 10:54:46 PM [3:09.794s][0m
 [INFO] 
 [INFO] --- maven-compiler-plugin:3.1:compile (default-compile) @ spark-core_2.10 ---
 [INFO] Changes detected - recompiling the module!
@@ -53,8 +122,34 @@ main:
 [INFO] --- scala-maven-plugin:3.2.0:testCompile (scala-test-compile-first) @ spark-core_2.10 ---
 [INFO] Using zinc server for incremental compilation
 [INFO] compiler plugin: BasicArtifact(org.scalamacros,paradise_2.10.4,2.0.1,null)
-[0m[[0minfo[0m] [0mCompiling 22 Scala sources to /home/hadoop/develop/spark/core/target/scala-2.10/test-classes...[0m
-[0m[[0minfo[0m] [0mCompile success at Aug 11, 2015 10:12:06 AM [1:12.014s][0m
+[0m[[0minfo[0m] [0mCompiling 145 Scala sources and 11 Java sources to /home/hadoop/develop/spark/core/target/scala-2.10/test-classes...[0m
+[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/test/scala/org/apache/spark/scheduler/OutputCommitCoordinatorSuite.scala:156: a pure expression does nothing in statement position; you may be omitting necessary parentheses[0m
+[0m[[33mwarn[0m] [0m      0 until rdd.partitions.size, resultHandler, 0)[0m
+[0m[[33mwarn[0m] [0m                                                  ^[0m
+[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/test/scala/org/apache/spark/util/MutableURLClassLoaderSuite.scala:25: imported `Utils' is permanently hidden by definition of object Utils in package util[0m
+[0m[[33mwarn[0m] [0mimport org.apache.spark.util.Utils[0m
+[0m[[33mwarn[0m] [0m                             ^[0m
+[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/test/scala/org/apache/spark/FileSuite.scala:496: constructor Job in class Job is deprecated: see corresponding Javadoc for more information.[0m
+[0m[[33mwarn[0m] [0m    val job = new Job(sc.hadoopConfiguration)[0m
+[0m[[33mwarn[0m] [0m              ^[0m
+[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/test/scala/org/apache/spark/scheduler/EventLoggingListenerSuite.scala:69: method isDir in class FileStatus is deprecated: see corresponding Javadoc for more information.[0m
+[0m[[33mwarn[0m] [0m    assert(!logStatus.isDir)[0m
+[0m[[33mwarn[0m] [0m                      ^[0m
+[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/test/scala/org/apache/spark/scheduler/EventLoggingListenerSuite.scala:73: method isDir in class FileStatus is deprecated: see corresponding Javadoc for more information.[0m
+[0m[[33mwarn[0m] [0m    assert(!fileSystem.getFileStatus(new Path(eventLogger.logPath)).isDir)[0m
+[0m[[33mwarn[0m] [0m                                                                    ^[0m
+[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/test/scala/org/apache/spark/scheduler/ReplayListenerSuite.scala:115: method isDir in class FileStatus is deprecated: see corresponding Javadoc for more information.[0m
+[0m[[33mwarn[0m] [0m    assert(!eventLog.isDir)[0m
+[0m[[33mwarn[0m] [0m                     ^[0m
+[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/test/scala/org/apache/spark/scheduler/TaskContextSuite.scala:89: method attemptId in class TaskContext is deprecated: use attemptNumber[0m
+[0m[[33mwarn[0m] [0m      Seq(TaskContext.get().attemptId).iterator[0m
+[0m[[33mwarn[0m] [0m                            ^[0m
+[0m[[33mwarn[0m] [0m7 warnings found[0m
+[0m[[33mwarn[0m] [0mwarning: [options] bootstrap class path not set in conjunction with -source 1.6[0m
+[0m[[33mwarn[0m] [0mNote: /home/hadoop/develop/spark/core/src/test/java/org/apache/spark/JavaAPISuite.java uses or overrides a deprecated API.[0m
+[0m[[33mwarn[0m] [0mNote: Recompile with -Xlint:deprecation for details.[0m
+[0m[[33mwarn[0m] [0m1 warning[0m
+[0m[[0minfo[0m] [0mCompile success at May 22, 2016 10:56:38 PM [1:44.256s][0m
 [INFO] 
 [INFO] --- maven-compiler-plugin:3.1:testCompile (default-testCompile) @ spark-core_2.10 ---
 [INFO] Nothing to compile - all classes are up to date
@@ -206,101 +301,6 @@ main:
 [INFO] --- maven-source-plugin:2.2.1:jar-no-fork (create-source-jar) @ spark-core_2.10 ---
 [INFO] Building jar: /home/hadoop/develop/spark/core/target/spark-core_2.10-1.3.0-sources.jar
 [INFO] 
-[INFO] --- scalastyle-maven-plugin:0.4.0:check (default) @ spark-core_2.10 ---
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/deploy/worker/Worker.scala message=File line length exceeds 100 characters line=181
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/scheduler/DAGScheduler.scala message=File line length exceeds 100 characters line=208
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/CacheManager.scala message=File line length exceeds 100 characters line=51
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/storage/BlockManagerMasterActor.scala message=File line length exceeds 100 characters line=428
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/storage/BlockManager.scala message=File line length exceeds 100 characters line=191
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/storage/BlockManager.scala message=File line length exceeds 100 characters line=233
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/storage/BlockManager.scala message=File line length exceeds 100 characters line=480
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/storage/BlockManager.scala message=File line length exceeds 100 characters line=496
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/storage/BlockManager.scala message=File line length exceeds 100 characters line=497
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/storage/BlockManager.scala message=File line length exceeds 100 characters line=500
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/storage/BlockManager.scala message=File line length exceeds 100 characters line=701
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/storage/BlockManager.scala message=The number of parameters should not exceed 10 line=178 column=6
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/SparkEnv.scala message=File line length exceeds 100 characters line=312
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/master/BlockWorkerInfo.scala message=Header does not match expected text line=1
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/master/BlockServerMasterActor.scala message=Header does not match expected text line=1
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/master/BlockServerMasterActor.scala message=File must end with newline character
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/master/BlockServerMaster.scala message=Header does not match expected text line=1
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/master/BlockServerMaster.scala message=File line length exceeds 100 characters line=79
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/master/BlockServerMaster.scala message=If block needs braces line=221 column=4
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/master/BlockServerMaster.scala message=File must end with newline character
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/SBlockEntry.scala message=Header does not match expected text line=1
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/SBlockEntry.scala message=If block needs braces line=75 column=4
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/SBlockEntry.scala message=If block needs braces line=79 column=4
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/SBlockEntry.scala message=File must end with newline character
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/BlockServerClientId.scala message=Header does not match expected text line=1
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/BlockServerClientId.scala message=File must end with newline character
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/worker/BlockServerWorker.scala message=Header does not match expected text line=1
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/worker/BlockServerWorker.scala message=File must end with newline character
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/worker/SpaceManager.scala message=Header does not match expected text line=1
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/worker/SpaceManager.scala message=File line length exceeds 100 characters line=40
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/worker/SpaceManager.scala message=File must end with newline character
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/worker/BlockIndexer.scala message=Header does not match expected text line=1
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/worker/BlockIndexer.scala message=File must end with newline character
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/worker/BlockServerWorkerActor.scala message=Header does not match expected text line=1
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/worker/BlockServerWorkerActor.scala message=File line length exceeds 100 characters line=80
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/worker/BlockServerWorkerActor.scala message=File line length exceeds 100 characters line=205
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/worker/BlockServerWorkerActor.scala message=File line length exceeds 100 characters line=221
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/worker/BlockServerWorkerActor.scala message=File line length exceeds 100 characters line=229
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/worker/BlockServerWorkerActor.scala message=File line length exceeds 100 characters line=232
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/worker/BlockServerWorkerActor.scala message=File line length exceeds 100 characters line=255
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/worker/BlockServerWorkerActor.scala message=File line length exceeds 100 characters line=310
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/worker/BlockServerWorkerActor.scala message=File line length exceeds 100 characters line=432
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/worker/BlockServerWorkerActor.scala message=If block needs braces line=228 column=6
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/worker/BlockServerWorkerActor.scala message=If block needs braces line=307 column=10
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/worker/BlockServerWorkerActor.scala message=If block needs braces line=386 column=10
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/worker/BlockServerWorkerActor.scala message=If block needs braces line=468 column=4
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/worker/SMManager.scala message=Header does not match expected text line=1
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/worker/SMManager.scala message=File must end with newline character
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/worker/ProcfsBasedGetter.scala message=Header does not match expected text line=1
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/worker/ProcfsBasedGetter.scala message=There should be a space before the plus (+) sign line=30 column=76
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/worker/ProcfsBasedGetter.scala message=There should be a space before the plus (+) sign line=31 column=77
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/worker/ProcfsBasedGetter.scala message=File line length exceeds 100 characters line=56
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/worker/ExecutorWatcher.scala message=Header does not match expected text line=1
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/worker/ExecutorWatcher.scala message=File line length exceeds 100 characters line=77
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/worker/ExecutorWatcher.scala message=File line length exceeds 100 characters line=79
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/worker/BlockServerClientInfo.scala message=Header does not match expected text line=1
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/worker/BlockServerClientInfo.scala message=File must end with newline character
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/BlockServerMessages.scala message=Header does not match expected text line=1
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/BlockServerMessages.scala message=File line length exceeds 100 characters line=22
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/BlockServerMessages.scala message=File line length exceeds 100 characters line=25
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/BlockServerMessages.scala message=File line length exceeds 100 characters line=27
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/BlockServerMessages.scala message=File line length exceeds 100 characters line=29
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/BlockServerMessages.scala message=File line length exceeds 100 characters line=66
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/BlockServerMessages.scala message=File line length exceeds 100 characters line=70
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/BlockServerMessages.scala message=File line length exceeds 100 characters line=78
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/BlockServerMessages.scala message=File line length exceeds 100 characters line=81
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/BlockServerMessages.scala message=File line length exceeds 100 characters line=87
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/BlockServerMessages.scala message=File line length exceeds 100 characters line=89
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/BlockServerMessages.scala message=File must end with newline character
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/client/LocalMemoryStore.scala message=Header does not match expected text line=1
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/client/LocalMemoryStore.scala message=File line length exceeds 100 characters line=109
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/client/LocalMemoryStore.scala message=File line length exceeds 100 characters line=180
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/client/LocalMemoryStore.scala message=File line length exceeds 100 characters line=182
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/client/LocalMemoryStore.scala message=File line length exceeds 100 characters line=201
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/client/LocalMemoryStore.scala message=If block needs braces line=195 column=10
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/client/LocalMemoryStore.scala message=File must end with newline character
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/client/BlockServerClientActor.scala message=Header does not match expected text line=1
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/client/BlockServerClientActor.scala message=File must end with newline character
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/client/BlockServerWorkerRef.scala message=Header does not match expected text line=1
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/client/BlockServerWorkerRef.scala message=File line length exceeds 100 characters line=24
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/client/BlockServerWorkerRef.scala message=File line length exceeds 100 characters line=144
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/client/BlockServerWorkerRef.scala message=File must end with newline character
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/BlockServerWorkerId.scala message=Header does not match expected text line=1
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/BlockServerWorkerId.scala message=File must end with newline character
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/SBlockId.scala message=Header does not match expected text line=1
-error file=/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/SBlockId.scala message=File must end with newline character
-Saving to outputFile=/home/hadoop/develop/spark/core/scalastyle-output.xml
-Processed 434 file(s)
-Found 86 errors
-Found 0 warnings
-Found 0 infos
-Finished in 13085 ms
-[WARNING] Scalastyle:check violations detected but failOnViolation set to false
-[INFO] 
 [INFO] >>> scala-maven-plugin:3.2.0:doc-jar (attach-scaladocs) @ spark-core_2.10 >>>
 [INFO] 
 [INFO] --- maven-enforcer-plugin:1.3.1:enforce (enforce-versions) @ spark-core_2.10 ---
@@ -324,14 +324,14 @@ why the feature should be explicitly enabled.
 /home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/util/MutableURLClassLoader.scala:26: warning: imported `ParentClassLoader' is permanently hidden by definition of class ParentClassLoader in package util
 import org.apache.spark.util.ParentClassLoader
                              ^
-model contains 286 documentable templates
+model contains 290 documentable templates
 /home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/TaskEndReason.scala:51: warning: Could not find any member to link for "org.apache.spark.scheduler.ShuffleMapTask".
 /**
 ^
 /home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/scheduler/package.scala:20: warning: Could not find any member to link for "org.apache.spark.scheduler.DAGScheduler".
 /**
 ^
-/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/rdd/RDD.scala:570: warning: The link target "PairRDDFunctions.aggregateByKey" is ambiguous. Several members fit the target:
+/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/rdd/RDD.scala:575: warning: The link target "PairRDDFunctions.aggregateByKey" is ambiguous. Several members fit the target:
 [U](zeroValue: U)(seqOp: (U, V) => U,combOp: (U, U) => U)(implicit evidence$3: scala.reflect.ClassTag[U]): org.apache.spark.rdd.RDD[(K, U)] in class PairRDDFunctions [chosen]
 [U](zeroValue: U,numPartitions: Int)(seqOp: (U, V) => U,combOp: (U, U) => U)(implicit evidence$2: scala.reflect.ClassTag[U]): org.apache.spark.rdd.RDD[(K, U)] in class PairRDDFunctions
 [U](zeroValue: U,partitioner: org.apache.spark.Partitioner)(seqOp: (U, V) => U,combOp: (U, U) => U)(implicit evidence$1: scala.reflect.ClassTag[U]): org.apache.spark.rdd.RDD[(K, U)] in class PairRDDFunctions
@@ -351,7 +351,7 @@ Notes:
  - you can use \\# to escape hashes, otherwise they will be considered as delimiters, like dots.
   /**
   ^
-/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/rdd/RDD.scala:558: warning: The link target "PairRDDFunctions.aggregateByKey" is ambiguous. Several members fit the target:
+/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/rdd/RDD.scala:563: warning: The link target "PairRDDFunctions.aggregateByKey" is ambiguous. Several members fit the target:
 [U](zeroValue: U)(seqOp: (U, V) => U,combOp: (U, U) => U)(implicit evidence$3: scala.reflect.ClassTag[U]): org.apache.spark.rdd.RDD[(K, U)] in class PairRDDFunctions [chosen]
 [U](zeroValue: U,numPartitions: Int)(seqOp: (U, V) => U,combOp: (U, U) => U)(implicit evidence$2: scala.reflect.ClassTag[U]): org.apache.spark.rdd.RDD[(K, U)] in class PairRDDFunctions
 [U](zeroValue: U,partitioner: org.apache.spark.Partitioner)(seqOp: (U, V) => U,combOp: (U, U) => U)(implicit evidence$1: scala.reflect.ClassTag[U]): org.apache.spark.rdd.RDD[(K, U)] in class PairRDDFunctions
@@ -359,7 +359,7 @@ Notes:
 
   /**
   ^
-/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/rdd/RDD.scala:546: warning: The link target "PairRDDFunctions.aggregateByKey" is ambiguous. Several members fit the target:
+/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/rdd/RDD.scala:551: warning: The link target "PairRDDFunctions.aggregateByKey" is ambiguous. Several members fit the target:
 [U](zeroValue: U)(seqOp: (U, V) => U,combOp: (U, U) => U)(implicit evidence$3: scala.reflect.ClassTag[U]): org.apache.spark.rdd.RDD[(K, U)] in class PairRDDFunctions [chosen]
 [U](zeroValue: U,numPartitions: Int)(seqOp: (U, V) => U,combOp: (U, U) => U)(implicit evidence$2: scala.reflect.ClassTag[U]): org.apache.spark.rdd.RDD[(K, U)] in class PairRDDFunctions
 [U](zeroValue: U,partitioner: org.apache.spark.Partitioner)(seqOp: (U, V) => U,combOp: (U, U) => U)(implicit evidence$1: scala.reflect.ClassTag[U]): org.apache.spark.rdd.RDD[(K, U)] in class PairRDDFunctions
@@ -367,7 +367,7 @@ Notes:
 
   /**
   ^
-/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/rdd/RDD.scala:1525: warning: The link target "PairRDDFunctions.reduceByKey" is ambiguous. Several members fit the target:
+/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/rdd/RDD.scala:1530: warning: The link target "PairRDDFunctions.reduceByKey" is ambiguous. Several members fit the target:
 (func: (V, V) => V): org.apache.spark.rdd.RDD[(K, V)] in class PairRDDFunctions [chosen]
 (func: (V, V) => V,numPartitions: Int): org.apache.spark.rdd.RDD[(K, V)] in class PairRDDFunctions
 (partitioner: org.apache.spark.Partitioner,func: (V, V) => V): org.apache.spark.rdd.RDD[(K, V)] in class PairRDDFunctions
@@ -567,7 +567,7 @@ object HistoryServer extends Logging {
 [INFO] ------------------------------------------------------------------------
 [INFO] BUILD SUCCESS
 [INFO] ------------------------------------------------------------------------
-[INFO] Total time: 6:22.194s
-[INFO] Finished at: Tue Aug 11 10:14:41 CST 2015
-[INFO] Final Memory: 47M/719M
+[INFO] Total time: 7:23.508s
+[INFO] Finished at: Sun May 22 22:58:40 CST 2016
+[INFO] Final Memory: 47M/723M
 [INFO] ------------------------------------------------------------------------

@@ -18,7 +18,7 @@ private[smstorage] trait EvictDataChooseStrategy {
 
 private[smstorage] class LRUStrategy extends EvictDataChooseStrategy {
   override def choose(blockList: mutable.Map[SBlockId, SBlockEntry]): Seq[(SBlockId, SBlockEntry)] = {
-    blockList.toSeq.sortBy(_._2.lastReadTime)(Ordering[Long].reverse)
+    blockList.toSeq.sortBy(_._2.lastReadTime)(Ordering[Long])
   }
 }
 

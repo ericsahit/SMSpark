@@ -96,7 +96,7 @@ object SBlockId {
     val shareId = if (dataSharing && isRddNameEmpty) {
       rdd.name
     } else {
-      rdd.sparkContext.applicationId
+      rdd.internalAppId
     }
     mkGlobalBlockId2(shareId, rdd.id, splitIndex, dataSharing && isRddNameEmpty)
   }
@@ -131,7 +131,7 @@ object SBlockId {
     case _ =>
       throw new IllegalStateException("Unrecognized userDefinedId: " + userDefinedId)
   }
-  
+
   /**
    * local block和sblock之间的转换
    * 使用rddName/appId + rddId + splitIndex作为globalId(userDefinedId)，作为全局唯一识别的id

@@ -29,8 +29,11 @@ import org.apache.spark.deploy.worker.Worker
 import org.apache.spark.util.Utils
 
 /**
- * @author hwang
- * TODO：模拟客户端Executor建立连接，然后进行并发的读写
+ * @author Wang Haihua
+ *
+ * Need specify JVM parametre before test:
+ * -Djava.library.path=/home/hadoop/develop/spark/lib/native/
+ *
  */
 class BlockServerWorkerSuite extends FunSuite with BeforeAndAfter {
   
@@ -42,10 +45,18 @@ class BlockServerWorkerSuite extends FunSuite with BeforeAndAfter {
   
   var worker: ActorRef = null
   var client: BlockServerClient = null
+
+  val initCachedSpace = 20 * MB
   
   //var writeBlockId: SBlockId = null
   
   before {
+
+    conf.set("spark.smspark.initcachedspace", initCachedSpace.toString)
+
+    System.setProperty("java.library.path", "/home/hadoop/develop/spark/lib/native/");
+    System.load("/home/hadoop/develop/spark/lib/native/ShmgetAccesser.so");//访问共享内存的动态链接库
+
     println("******************before test.")
     val securityManager: SecurityManager = new SecurityManager(conf)
     val hostname = "localhost"
@@ -82,8 +93,14 @@ class BlockServerWorkerSuite extends FunSuite with BeforeAndAfter {
     //client.registerClient(15*MB, null)
 
   }
+
+  private def tryWriteBlock(size: Long): Unit = {
+
+  }
   
   test("test worker actor write block") {
+
+    println("Test worker actor write block begin...")
     
     val blockId = new RDDBlockId(2, 1, "KMeansInput|"+1)
     val sblockId = SBlockId(blockId)
@@ -91,10 +108,11 @@ class BlockServerWorkerSuite extends FunSuite with BeforeAndAfter {
     assert(client.getBlock(sblockId).isEmpty)
     //assert(client.getBlockSize(sblockId))
     
-    val userDefinedId = sblockId.userDefinedId;
+    val userDefinedId = sblockId.userDefinedId
     assert(userDefinedId == "KMeansInput|"+1)
 
-    assert(client.reqNewBlock(userDefinedId, MB*20).isEmpty)
+    //TODO: Request block size > totalSpaceSize, return false directly.
+    //assert(client.reqNewBlock(userDefinedId, MB*30).isEmpty)
     
     val size=2*MB
     val res = client.reqNewBlock(userDefinedId, size)
@@ -228,11 +246,18 @@ class BlockServerWorkerSuite extends FunSuite with BeforeAndAfter {
     //TimeUnit.SECONDS.sleep(30)
 
   }
-  
+
+  test("test worker write read block") {
+
+  }
+
+  /**
+   * Main test read/write block
+   */
   test("test worker concurrent write read block") {
     //测试并发的读写共享内存
     //已测试申请200个共享内存，测试成功
-    val num = 8//申请8*2=16MB超过15MB，则第八个申请时会失败
+    val num = 20//申请8*2=16MB超过15MB，则第八个申请时会失败
     //val pool = Executors.newFixedThreadPool(num) //使用Executors，线程的异常会被隐藏，不向上抛出
     for (i <- 1 to num) {
 
@@ -243,8 +268,22 @@ class BlockServerWorkerSuite extends FunSuite with BeforeAndAfter {
       }).run()
 
     }
+
+    //Test write block belong to same RDD
+    var size=20*MB
+    var res = client.reqNewBlock("app#20#21", size)
+    assert(res.isEmpty)
+
+    //Test write block size > total Cached Space memory size
+    size=21*MB
+    res = client.reqNewBlock("app#21#21", size)
+    assert(res.isEmpty)
+
+    //testConcurrentReadWrite(21)
+
     Thread.sleep(10000)
     //pool.awaitTermination(20, TimeUnit.SECONDS)
+
   }
   
   test("test worker once write mutil read block") {
@@ -330,18 +369,19 @@ class BlockServerWorkerSuite extends FunSuite with BeforeAndAfter {
   }
   
   def testConcurrentReadWrite(index: Int) {
-    val blockId = new RDDBlockId(1, index)
+    val globalId = SBlockId.mkGlobalBlockId2("app", index, index)
+    val blockId = new RDDBlockId(index, index, globalId)
     val sblockId = SBlockId(blockId)
     
     assert(client.getBlock(sblockId).isEmpty)
     //assert(client.getBlockSize(sblockId))
     
-    val userDefinedId = sblockId.userDefinedId;
-    assert(userDefinedId == "rdd_1_"+index)
-    println(sblockId.userDefinedId+" thread begin write")
+    val userDefinedId = sblockId.userDefinedId
+    assert(userDefinedId == s"app#"+index+"#"+index)
+    println(sblockId.userDefinedId + " thread begin write")
     //assert(client.reqNewBlock(userDefinedId, MB*20).isEmpty)
     
-    val size=2*MB
+    val size=index*MB
     val res = client.reqNewBlock(userDefinedId, size)
     assert(res.isDefined)
     
@@ -366,6 +406,7 @@ class BlockServerWorkerSuite extends FunSuite with BeforeAndAfter {
     os.close()
     
     val newblockid = client.writeBlockResult(entry.entryId, true)
+    println(newblockid+"has been write successfully")
     assert(newblockid.isDefined)
     assert(newblockid.get.userDefinedId == sblockId.userDefinedId)
 
