@@ -59,6 +59,11 @@ abstract class BlockTransferService extends ShuffleClient with Closeable with Lo
    * Note that this API takes a sequence so the implementation can batch requests, and does not
    * return a future so the underlying implementation can invoke onBlockFetchSuccess as soon as
    * the data of a block is fetched, rather than waiting for all blocks to be fetched.
+   *
+   * [smspark]: host和port可以确定一个服务位置
+   * execId: String,
+   * blockId: String, 确定拉取哪个block
+   *
    */
   override def fetchBlocks(
       host: String,

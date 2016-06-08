@@ -14,7 +14,7 @@ import org.apache.spark.Logging
 import org.apache.spark.deploy.master.WorkerInfo
 
 /**
- * @author hwang
+ * @author Wang Haihua
  * Master节点上的BlockServer Actor，负责协调各个节点之间的资源需求
  * 
  * 与Worker节点的通信复用Master与Worker原有的通信，在Master actor中加入BlockServer组件

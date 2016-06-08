@@ -32,6 +32,12 @@ import scala.concurrent.Future
 /**
  * A [[BlockTransferService]] implementation based on [[ConnectionManager]], a custom
  * implementation using Java NIO.
+ *
+ * [smspark]: smspark需要得到block的globalId
+ * 一个典型的流程：远程拉取block，调用fetchBlocks；
+ * fetchBlocks：传入blockId.toString；内存使用(BlockId(blockId))来做
+ *
+ *
  */
 final class NioBlockTransferService(conf: SparkConf, securityManager: SecurityManager)
   extends BlockTransferService with Logging {

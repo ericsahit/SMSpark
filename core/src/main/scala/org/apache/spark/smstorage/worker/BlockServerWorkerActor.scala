@@ -4,13 +4,18 @@
 package org.apache.spark.smstorage.worker
 
 import java.util.{HashMap => JHashMap}
+import org.apache.spark.network.{BlockTransferService, BlockDataManager}
+import org.apache.spark.network.buffer.ManagedBuffer
+import org.apache.spark.network.netty.NettyBlockTransferService
+import org.apache.spark.network.nio.NioBlockTransferService
+import org.apache.spark.serializer.Serializer
 import org.apache.spark.smstorage.migration._
+import org.apache.spark.storage.{TestBlockId, BlockNotFoundException, StorageLevel, BlockId}
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{mutable, immutable}
 import scala.collection.JavaConversions._
 import scala.concurrent.duration._
-import org.apache.spark.Logging
-import org.apache.spark.SparkConf
+import org.apache.spark.{SparkException, Logging, SparkConf, SparkEnv}
 import org.apache.spark.smstorage.BlockServerMessages._
 import org.apache.spark.smstorage.BlockServerClientId
 import org.apache.spark.smstorage._
@@ -71,7 +76,7 @@ import scala.util.{Try, Failure, Success}
  */
 private[spark]
 class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
-  extends Actor with ActorLogReceive with Logging {
+  extends Actor with ActorLogReceive with BlockDataManager with Logging {
 
   /**
    * 共享存储实现的管理组件
@@ -85,7 +90,7 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
    * 初始内存=WorkerMemory * cmemoryFraction * safetyFraction
    * 最大可用内存不随着Executor生命周期的变化而变化
    */
-  val initSpaceMemory: Long = if (worker == null) {// for test
+  val initSpaceMemory: Long = if (worker == null) {// for unit test
     conf.get("spark.smspark.initcachedspace").toLong
   } else {
     getNodeMaxSMemory(conf, worker.memory)
@@ -117,6 +122,13 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
     }
 
   /**
+   * 反序列化类，为了反序列化共享存储数据
+   */
+  val serializer = Helper.instantiateClassFromConf[Serializer](conf,
+    "spark.serializer", "org.apache.spark.serializer.JavaSerializer")
+  logDebug(s"Using serializer: ${serializer.getClass}")
+
+  /**
    * 索引 Block 的组件
    */
   val blockIndexer: BlockIndexer = new BlockIndexer(strategy)
@@ -125,6 +137,11 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
    * 监控 Executor 内存运行状况的组件
    */
   val executorWatcher: ExecutorWatcher = new ExecutorWatcher(this, spaceManager, blockIndexer)
+
+  /**
+   * 数据传输组件
+   */
+  var blockTransferService:BlockTransferService = null
 
   /**
    * 保存连接到 BlockServerWorker 的客户端(Executor)，和对应的使用情况
@@ -196,6 +213,17 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
 //       CheckExecutorMemory
 //       )
 
+    //初始化什么
+    blockTransferService =
+      conf.get("spark.smspark.blockTransferService", "netty").toLowerCase match {
+        case "netty" =>
+          new NettyBlockTransferService(conf, worker.securityMgr, 2)
+        case "nio" =>
+          new NioBlockTransferService(conf, worker.securityMgr)
+      }
+
+    blockTransferService.init(this)
+
     super.preStart()
   }
   
@@ -207,15 +235,13 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
     def clearEntry(entry: SBlockEntry) = spaceManager.releaseSpace(entry.entryId, entry.size.toInt)
     pendingEntries.values.foreach(clearEntry)
     blockIndexer.clear(clearEntry)
-    
+
     if (worker != null && worker.connected) {
       //TODO: 清理工作
       //worker.master ! 
     }
   }
-  
-  
-  
+
   override def receiveWithLogging = {
     
     case RegisterBlockServerClient(clientId, maxJvmMemSize, maxMemSize, jvmId, clientActor) =>
@@ -316,11 +342,15 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
    * 申请失败：None
    */
   def reqNewBlock(clientId: BlockServerClientId, userDefinedId: String, size: Long): Option[SBlockEntry] = {
-    
-    val client = clientList.get(clientId)
-    if (client.isEmpty) {//如果客户端没有注册，则报错，拒绝添加Block
-      return None
-    }
+
+    //是否本地客户端写入
+    val isMigrateWrite = clientId == null
+
+//    val client = clientList.get(clientId)
+//    if (client.isEmpty) {//如果客户端没有注册，则报错，拒绝添加Block
+//      return None
+//    }
+
     logDebug(s"Begin to request space for $userDefinedId, size: $size")
     //TODO: [多线程访问控制]申请存储空间时候可能已经有其他客户端开始写入操作
     //通过查看client的blocks(已经写成功)，和pendingEntries(正在写)来确定
@@ -329,9 +359,11 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
       case None => //如果本地有足够的存储空间
 
       case Some(needSpace) => //本地空间不足，需要进行节点迁移，或者远程分配空间，或者返回错误TODO
-        if (needSpace < 0) { //Try store block size > totalMemory, will not evict and directly return.
+        //不进行数据迁移的情况：1)远程数据迁移写入数据 2) 写入size>totalMemory，
+        if (isMigrateWrite || needSpace < 0) {
           spaceAfterEvict = size
         } else {
+          //进行数据迁移
           logDebug(s"Not enough space, will migrate or evict some block.")
           spaceAfterEvict = doDataMigrateOrEvict(userDefinedId, needSpace)
         }
@@ -378,7 +410,7 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
           }
 
           //Master这里发送AddBlock异步消息，userDefinedId作为唯一id
-          //TODO: 应该上传blockid信息，如何确定远程的block信息
+          //都是应该上传数据的哪些信息？globalId，size
           if (worker != null)
             worker.sendMasterBSMessage(ReqbsMasterAddBlock(worker.workerId, entry))
           
@@ -576,7 +608,7 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
   }
 
   /**
-   * 向bsMaster发送请求，选择合适的目标迁移节点
+   * TODO: 向bsMaster发送请求，选择合适的目标迁移节点
    * @param block
    * @return
    */
@@ -587,14 +619,46 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
 
   /**
    * TODO: implement data migrate
+   *
+   * upload nio 使用的是SBlockId封装为BlockMessage
+   *
    * @param block
    * @param dest
    * @return
    */
-  private def doMigrate(block: SBlockEntry, dest: MigrateDestination) = {
+  private def doMigrate(entry: SBlockEntry, dest: MigrateDestination) = {
 
     //和Spark内存管理中的数据传输方法一致
     Try {
+
+      //通过一个String类型的BlockId来传递数据
+      //需要传递哪些信息？entry不需要，blockId需要，当传输之后，也可以找到
+      //userDefinedId
+      val migrateBlockId = TestBlockId(entry.userDefinedId)
+
+      //根据入口信息，得到数据buffer
+      val data = Helper.getBlock(entry)
+
+      //TODO 上传数据，是否需要同步上传？还是异步也可以
+      //appId在init时候设置，使用？
+      //ExecutorId使用了“migrateServer”
+      //使用blockId.toString
+      //传输到Server端，然后解析这些参数，存储Block
+      //putBlockData是否需要异步进行？
+      /**
+       * 传递的参数：
+       * appId 程序id，未使用到
+       * execId 暂时未使用到
+       * blockId 使用blockId.toString变为string，在Server端调用BlockId(blockId)还原为blockId
+       * data ManagedBuffer，包装了数据的ByteBuffer
+       * storageLevel 存储级别，默认为OFF_HEAP
+       */
+      blockTransferService.uploadBlockSync(dest.host, dest.port, "migrateServer",
+        migrateBlockId, data, StorageLevel.OFF_HEAP)
+
+      //报告Coordinator本节点数据增删
+      worker.sendMasterBSMessage()
+      //
 
     }
 
@@ -655,6 +719,63 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
     val safetyFraction = conf.getDouble("spark.smspark.safetyFraction", 0.9)
     val smemory = (workerMemory * smemoryFraction * safetyFraction * 1024 * 1024).toLong
     smemory
+  }
+
+  /**
+   * 得到本地的Block
+   * 在远程读取Block数据时候使用
+   */
+  override def getBlockData(blockId: BlockId): ManagedBuffer = {
+
+    if (blockId.isInstanceOf[TestBlockId]) {
+      throw new SparkException("Get sblock from remote which type is not SBlockId: " + blockId)
+    }
+
+    val sid: SBlockId = new SBlockId(blockId.asInstanceOf[TestBlockId].id)
+    blockIndexer.getBlock(sid) match {
+      case Some(entry) =>
+        Helper.getBlock(entry)
+      case None =>
+        throw new BlockNotFoundException(sid.userDefinedId)
+    }
+  }
+
+  /**
+   * Put the block locally, using the given storage level.
+   * 这是一个同步方法，其时间=请求空间+数据写入
+   * [smspark]: 在远程数据迁移时调用
+   * 1.
+   */
+  override def putBlockData(blockId: BlockId, data: ManagedBuffer, level: StorageLevel) {
+
+    if (blockId.isInstanceOf[TestBlockId]) {
+      throw new SparkException("Get sblock from remote which type is not SBlockId: " + blockId)
+    }
+
+    //从userDefinedId转换为SBlockId
+    val globalId = blockId.asInstanceOf[TestBlockId].id
+    //val sid: SBlockId = SBlockId(blockId.asInstanceOf[TestBlockId].id)
+
+    //请求空间，这里不需要再进行替换操作
+    val timeout = AkkaUtils.lookupTimeout(conf)
+    val entryOpt: Option[SBlockEntry] =
+      AkkaUtils.askWithReply[Option[SBlockEntry]](
+        RequestNewBlock(null, globalId, data.size()), self, timeout)
+
+    entryOpt match {
+      case Some(entry) =>
+        //write
+      Helper.writeBlock(entry, data) match {
+          case Success(_) =>
+            //write block result
+          AkkaUtils.askWithReply[Option[SBlockEntry]](WriteBlockResult(null, entry.entryId, true), self, null)
+          case Failure(ex) =>
+            logWarning("Write block failure, will abondon migrated block")
+      }
+      case None => //空间不足
+        logWarning("Not enough space, will abondon migrated block")
+    }
+
   }
 }
 

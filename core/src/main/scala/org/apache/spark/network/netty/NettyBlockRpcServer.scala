@@ -36,6 +36,9 @@ import org.apache.spark.storage.{BlockId, StorageLevel}
  *
  * Opened blocks are registered with the "one-for-one" strategy, meaning each Transport-layer Chunk
  * is equivalent to one Spark-level shuffle block.
+ *
+ * [smspark] NettyBlockTransferService 需要生成一个NettyBlockRpcServer，来作为Server进行数据读取写入
+ * 传输时候需要ExecutorId和AppId，好像没用到，在shuffle时候会用到
  */
 class NettyBlockRpcServer(
     serializer: Serializer,
@@ -59,6 +62,7 @@ class NettyBlockRpcServer(
         logTrace(s"Registered streamId $streamId with ${blocks.size} buffers")
         responseContext.onSuccess(new StreamHandle(streamId, blocks.size).toByteArray)
 
+        //当远程传输block时候，会到server端进行block解析和存储
       case uploadBlock: UploadBlock =>
         // StorageLevel is serialized as bytes using our JavaSerializer.
         val level: StorageLevel =

@@ -60,7 +60,9 @@ class NettyBlockTransferService(conf: SparkConf, securityManager: SecurityManage
     }
     transportContext = new TransportContext(transportConf, rpcHandler)
     clientFactory = transportContext.createClientFactory(bootstrap.toList)
+    //server的端口号，是否需要所有bsWorker均使用同一个？
     server = transportContext.createServer(conf.getInt("spark.blockManager.port", 0))
+    //需要得到appId，而BlockServerWorker创建时候没有appId，可以使用一个特殊的id
     appId = conf.getAppId
     logInfo("Server created on " + server.getPort)
   }
