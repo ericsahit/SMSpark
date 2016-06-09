@@ -224,6 +224,9 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
 
     blockTransferService.init(this)
 
+    SMSparkContext.blockTransferService = blockTransferService
+    SMSparkContext.bsWorker = this
+
     super.preStart()
   }
   
@@ -397,17 +400,17 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
           assert(entry.entryId == entryId)
           val blockId = blockIndexer.addBlock(entryId, entry)
           //每个Client更新自己的持有Block信息
-          clientList.get(clientId).map { client =>
-            client.addBlock(blockId, entry)
-          }
-
-          if (blockLocation.containsKey(blockId)) {
-            blockLocation.get(blockId).add(clientId)
-          } else {
-            val location = new mutable.HashSet[BlockServerClientId]
-            location.add(clientId)
-            blockLocation.put(blockId, location)
-          }
+//          clientList.get(clientId).map { client =>
+//            client.addBlock(blockId, entry)
+//          }
+//
+//          if (blockLocation.containsKey(blockId)) {
+//            blockLocation.get(blockId).add(clientId)
+//          } else {
+//            val location = new mutable.HashSet[BlockServerClientId]
+//            location.add(clientId)
+//            blockLocation.put(blockId, location)
+//          }
 
           //Master这里发送AddBlock异步消息，userDefinedId作为唯一id
           //都是应该上传数据的哪些信息？globalId，size
@@ -727,7 +730,7 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
    */
   override def getBlockData(blockId: BlockId): ManagedBuffer = {
 
-    if (blockId.isInstanceOf[TestBlockId]) {
+    if (!blockId.isInstanceOf[TestBlockId]) {
       throw new SparkException("Get sblock from remote which type is not SBlockId: " + blockId)
     }
 
@@ -748,7 +751,7 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
    */
   override def putBlockData(blockId: BlockId, data: ManagedBuffer, level: StorageLevel) {
 
-    if (blockId.isInstanceOf[TestBlockId]) {
+    if (!blockId.isInstanceOf[TestBlockId]) {
       throw new SparkException("Get sblock from remote which type is not SBlockId: " + blockId)
     }
 
@@ -768,7 +771,14 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
       Helper.writeBlock(entry, data) match {
           case Success(_) =>
             //write block result
-          AkkaUtils.askWithReply[Option[SBlockEntry]](WriteBlockResult(null, entry.entryId, true), self, null)
+          AkkaUtils.askWithReply[Option[SBlockId]](
+            WriteBlockResult(null, entry.entryId, true), self, timeout) match {
+            case Some(sid) =>
+              assert(sid.userDefinedId == globalId)
+            case None =>
+              logWarning(s"Write transfer block error!")
+          }
+
           case Failure(ex) =>
             logWarning("Write block failure, will abondon migrated block")
       }

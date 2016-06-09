@@ -5,6 +5,7 @@ package org.apache.spark.smstorage
 
 import org.apache.spark.network.buffer.NioManagedBuffer
 import org.apache.spark.smstorage.BlockServerMessages.MigrateDestination
+import org.mockito.Mock
 import org.scalatest.FunSuite
 import org.apache.spark.SparkConf
 import akka.actor.ActorSystem
@@ -27,6 +28,8 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import org.apache.spark.deploy.worker.Worker
 import org.apache.spark.util.Utils
+
+import org.mockito.Mockito.{mock, when}
 
 /**
  * @author Wang Haihua
@@ -69,14 +72,21 @@ class BlockServerWorkerSuite extends FunSuite with BeforeAndAfter {
     val (actorSystem, port) = AkkaUtils.createActorSystem("test", hostname, 0, conf, securityManager)
     this.actorSystem = actorSystem
     
-    val deamonWorker: Worker = null
-    worker = new BlockServerWorkerActor(conf, deamonWorker)
-    workerActor = actorSystem.actorOf(Props(worker), "worker")
+    val deamonWorker: Worker = mock(classOf[Worker])
+    when(deamonWorker.securityMgr).thenReturn(securityManager)
+    when(deamonWorker.memory).thenReturn(20*2) //40MB
+    //worker = new BlockServerWorkerActor(conf, deamonWorker)
+    //workerActor = actorSystem.actorOf(Props(worker), "worker")
+    workerActor = actorSystem.actorOf(Props(new BlockServerWorkerActor(conf, deamonWorker)), "worker")
+
     val clientId: BlockServerClientId = new BlockServerClientId("test", "localhost", 9999, "test-app")
     client = new BlockServerClient(clientId, workerActor, conf)
     val jvmId = Utils.getJvmId()
     println(jvmId)
     client.registerClient(512*MB, 20*MB, jvmId, null)
+
+    worker = SMSparkContext.bsWorker
+    println(worker != null)
   }
   after {
     println("******************after test.")
@@ -312,9 +322,14 @@ class BlockServerWorkerSuite extends FunSuite with BeforeAndAfter {
 
   test("test block data manager function") {
     //上传一个block，然后再读出一个block
+    assert(worker != null)
     val index = 89
     val data = new NioManagedBuffer(generateBytesData(index, 10*MB))
     val blockId = new TestBlockId(s"app#$index#1")
+
+    SMStorageWriteTest.printByteArr(data.nioByteBuffer().array(), 100)
+    SMStorageWriteTest.printByteArrLast(data.nioByteBuffer().array(), 100)
+
     worker.putBlockData(blockId, data, StorageLevel.OFF_HEAP)
     val dataOut = worker.getBlockData(blockId)
 
@@ -330,6 +345,9 @@ class BlockServerWorkerSuite extends FunSuite with BeforeAndAfter {
     val data = new NioManagedBuffer(generateBytesData(index, 10*MB))
     val blockId = new TestBlockId(globalId)
 
+    SMStorageWriteTest.printByteArr(data.nioByteBuffer().array(), 100)
+    SMStorageWriteTest.printByteArrLast(data.nioByteBuffer().array(), 100)
+
     val target = MigrateDestination("localWorker", "127.0.0.1", transferServicePort)
     //workerActor
 
@@ -343,7 +361,7 @@ class BlockServerWorkerSuite extends FunSuite with BeforeAndAfter {
     )
 
     val dataDownload = worker.blockTransferService.fetchBlockSync(
-      target.host, target.port, "localWorker", blockId.id)
+      target.host, target.port, "localWorker", blockId.toString)
 
     SMStorageWriteTest.printByteArr(dataDownload.nioByteBuffer().array(), 100)
     SMStorageWriteTest.printByteArrLast(dataDownload.nioByteBuffer().array(), 100)
