@@ -4,6 +4,9 @@
 package org.apache.spark.smstorage.master
 
 import java.util.{HashMap => JHashMap}
+import org.apache.spark.smstorage.BlockServerMessages.MigrateDestination
+import org.apache.spark.smstorage.migration._
+
 import scala.collection.JavaConversions._
 
 import org.apache.spark.deploy.master.Master
@@ -42,7 +45,24 @@ import org.apache.spark.deploy.master.WorkerInfo
  * 
  */
 class BlockServerMaster(val master: Master) extends Logging {
-  
+
+  private val conf = master.conf
+
+  private val strategy: DestinationChooseStrategy =
+  {
+    val port = conf.getInt("spark.blockManager.port", 8975)
+    if (conf.get("spark.smspark.migration.strategy", "Random").toUpperCase() == "Random") {
+      new RandomDestinationChooseStrategy(port)
+    }
+    else {
+      val a2 = conf.getDouble("spark.smspark.migration.a2", 0.5)
+      val b2 = conf.getDouble("spark.smspark.migration.b2", 0.5)
+      val a3 = conf.getDouble("spark.smspark.migration.a3", 0.5)
+      val b3 = conf.getDouble("spark.smspark.migration.b3", 0.5)
+      new LinearWeightDestinationChooseStrategy(port, a2, b2, a3, b3)
+    }
+  }
+
   private val sblocks = new mutable.HashMap[String, SBlockEntry]
   
   /**
@@ -247,6 +267,36 @@ class BlockServerMaster(val master: Master) extends Logging {
 
 
     sblockIds.map(sblockId => getLocations(sblockId))
+  }
+
+  /**
+   * 根据数据选取一个节点策略
+   * @param sblockEntry
+   * @return
+   */
+  def getMigrationDestnation(workerId: String, sblockEntry: SBlockEntry) : Option[MigrateDestination] = {
+
+    master.idToWorker.get(workerId) match {
+      case Some(workerInfo) =>
+        workerInfo.lastHeartbeat = System.currentTimeMillis()
+      case None =>
+        if (master.workers.map(_.id).contains(workerId)) {
+          logWarning(s"Got heartbeat from unregistered worker $workerId." +
+            " Asking it to re-register.")
+        } else {
+          logWarning(s"Got  from unregistered blockServerWorker $workerId." +
+            " This worker was never registered, so ignoring.")
+        }
+    }
+
+    val toChoose = master.workers.filter(_.smemoryFree > sblockEntry.size)
+    if (toChoose.size > 0) {
+      strategy.chooseDestination(toChoose.toSeq, sblockEntry)
+    } else {
+      None
+    }
+
+
   }
   
 }

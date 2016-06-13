@@ -43,11 +43,8 @@ class SBlockId(
    */
   //def localBlockId: String
 
-  def isSameRDD(otherGlobalBlockId: String) = {
-    val (sharedId, rddId) = SBlockId.getRddUniqueId(userDefinedId)
-    val (oSharedId, oRddId) = SBlockId.getRddUniqueId(otherGlobalBlockId)
-    (sharedId == oSharedId) && (rddId == oRddId)
-  }
+  def isSameRDD(otherGlobalBlockId: String) =
+    SBlockId.isBelongToSameRdd(userDefinedId, otherGlobalBlockId)
   
   /**
    * RDD的id，作为判断Block是否相同的判断条件
@@ -116,6 +113,12 @@ object SBlockId {
       case _ =>
         throw new IllegalStateException("Unrecognized globalId: " + globalId)
     }
+  }
+
+  def isBelongToSameRdd(globalId: String, other: String): Boolean = {
+    val (sharedId, rddId) = SBlockId.getRddUniqueId(globalId)
+    val (oSharedId, oRddId) = SBlockId.getRddUniqueId(other)
+    (sharedId == oSharedId) && (rddId == oRddId)
   }
   
   /**

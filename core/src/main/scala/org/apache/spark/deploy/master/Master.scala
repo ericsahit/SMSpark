@@ -468,6 +468,10 @@ private[spark] class Master(
     case ReqbsMasterGetLocations(sblockIds) => {
       sender ! bsMaster.getLocationMultipleSBlockId(sblockIds)
     }
+
+    case ReqChooseMigrateDesination(workerId, sblock) => {
+      sender ! bsMaster.getMigrationDestnation(workerId, sblock)
+    }
   }
 
   def canCompleteRecovery =

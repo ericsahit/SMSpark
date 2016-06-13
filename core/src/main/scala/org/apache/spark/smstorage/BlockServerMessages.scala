@@ -30,6 +30,9 @@ private[spark] object BlockServerMessages {
   //Driver向bsMaster请求Block的位置，查询是否存在已有的缓存数据
   case class ReqbsMasterGetLocations(blockIds: Array[SBlockId]) extends BlockServerWorkerToMaster
 
+  //bsWorker向bsMaster请求选取目标迁移节点
+  case class ReqChooseMigrateDesination(workerId: String, entry: SBlockEntry) extends BlockServerWorkerToMaster
+
   case class MigrateDestination(workerId: String, host: String, port: Int)
   
   //////////////////////////////////////////////////////////////////////////////////

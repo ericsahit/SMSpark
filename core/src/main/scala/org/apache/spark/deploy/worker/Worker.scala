@@ -21,8 +21,11 @@ import java.io.File
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.{UUID, Date}
+import akka.pattern.Patterns
+
 import scala.collection.JavaConversions._
 import scala.collection.mutable.{HashMap, HashSet}
+import scala.concurrent.Await
 import scala.concurrent.duration._
 import scala.language.postfixOps
 import scala.util.Random
@@ -85,6 +88,8 @@ private[spark] class Worker(
   val CLEANUP_INTERVAL_MILLIS = conf.getLong("spark.worker.cleanup.interval", 60 * 30) * 1000
   // TTL for app folders/data;  after TTL expires it will be cleaned up
   val APP_DATA_RETENTION_SECS = conf.getLong("spark.worker.cleanup.appDataTtl", 7 * 24 * 3600)
+
+  val timeout = AkkaUtils.askTimeout(conf)
 
   val testing: Boolean = sys.props.contains("spark.testing")
   var master: ActorSelection = null
@@ -191,6 +196,19 @@ private[spark] class Worker(
     if (coordinatorEnabled && connected) {
       master ! message
     }
+  }
+
+  /**
+   * 同步发送消息
+   * @param message
+   */
+  def sendMasterBSMessageSync[T](message: Any):T = {
+    val fut = Patterns.ask(master, message, timeout)
+    val ret = Await.result(fut, timeout).asInstanceOf[T]
+    ret
+    //master.ask(message)
+    //AkkaUtils.askWithReply(message, master, timeout)
+    //AkkaUtils.askWithReply(message, master, timeout)
   }
 
   def changeMaster(url: String, uiUrl: String) {

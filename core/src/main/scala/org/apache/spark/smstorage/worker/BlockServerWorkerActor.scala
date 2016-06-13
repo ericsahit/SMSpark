@@ -617,7 +617,12 @@ class BlockServerWorkerActor(conf: SparkConf, worker: Worker)
    */
   private def chooseDestination(block: SBlockEntry) = {
 
-    Option(MigrateDestination("", "127.0.0.1", 10075))
+    val destOpt = worker.sendMasterBSMessageSync[Option[MigrateDestination]](
+      ReqChooseMigrateDesination(worker.workerId, block))
+    //Some(MigrateDestination("", "127.0.0.1", 10075))
+
+    destOpt
+
   }
 
   /**

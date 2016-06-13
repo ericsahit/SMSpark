@@ -52,10 +52,17 @@ private[spark] class WorkerInfo(
    */
   @transient var sblocks: mutable.HashMap[String, SBlockEntry] = _
   //BlockWorker的总可用内存
-  @transient var smemoryTotal: Long = (memory * 0.5).toLong
+  def smemoryTotal: Long = (memory * 0.5).toLong
+
+  def smemoryFree: Long = smemoryTotal - smemoryUsed
   //BlockWorker的当前已使用内存
   @transient var smemoryUsed: Long = _
-  
+
+  /**
+   * 记录smemory使用量的历史值，第一条记录是开始时间和0L
+   */
+  @transient var smemoryUsedHistory: mutable.HashMap[Long, Long] = _
+
   @transient var lastHeartbeat: Long = _
 
   init()
@@ -77,9 +84,9 @@ private[spark] class WorkerInfo(
     lastHeartbeat = System.currentTimeMillis()
     
     sblocks = new mutable.HashMap
-    smemoryTotal = 0L
     smemoryUsed = 0L
-    
+    smemoryUsedHistory = new mutable.HashMap
+    smemoryUsedHistory += ((lastHeartbeat, smemoryUsed))
   }
 
   def hostPort: String = {
@@ -133,22 +140,26 @@ private[spark] class WorkerInfo(
     
     sblocks.get(newEntry.userDefinedId) match {
       case Some(oldEntry) =>
-        smemoryUsed += oldEntry.size
-        smemoryUsed -= newEntry.size
+
+        updateSMemory(oldEntry.size - newEntry.size)
         sblocks.update(newEntry.userDefinedId, newEntry)
       case None =>
         
     }
       
   }
-  
-  def updateSMemoryTotal(memoryTotal: Long) {
-     smemoryTotal = memoryTotal
+
+  private def updateSMemory(delta: Long): Unit = {
+    smemoryUsedHistory += ((System.currentTimeMillis(), smemoryUsed))
+    smemoryUsed += delta
   }
-  
+
   def addBlock(blockEntry: SBlockEntry) {
-    smemoryUsed += blockEntry.size
+    if (!sblocks.contains(blockEntry.userDefinedId)) {
+      updateSMemory(blockEntry.size)
+    }
     sblocks += ((blockEntry.userDefinedId, blockEntry))
+
   }
   
   /**
@@ -158,7 +169,7 @@ private[spark] class WorkerInfo(
   def removeBlock(blockUid: String) {
     sblocks.get(blockUid) match {
       case Some(blockEntry) =>
-        smemoryUsed -= blockEntry.size
+        updateSMemory(-blockEntry.size)
         sblocks.remove(blockUid)
       case None =>
     }
@@ -170,7 +181,7 @@ private[spark] class WorkerInfo(
    */
   def smemoryUsePercent: Double = {
     if (smemoryTotal > 0) {
-      smemoryUsed / smemoryTotal
+      smemoryUsed.toDouble / smemoryTotal.toDouble
     } else {
       0.00
     }

@@ -33,7 +33,7 @@ import org.mockito.Mockito.{mock, when}
 
 /**
  * @author Wang Haihua
- *
+ * 注意：对于每一个测试，需要基于linux系统，且指定以下JVM参数，便于加载native库文件！！！
  * Need specify JVM parametre before test:
  * -Djava.library.path=/home/hadoop/develop/spark/lib/native/
  *
