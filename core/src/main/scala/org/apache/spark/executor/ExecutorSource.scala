@@ -17,6 +17,10 @@
 
 package org.apache.spark.executor
 
+import org.apache.spark.SparkEnv
+import org.apache.spark.smstorage.worker.ProcfsBasedGetter
+import org.apache.spark.util.Utils
+
 import scala.collection.JavaConversions._
 
 import com.codahale.metrics.{Gauge, MetricRegistry}
@@ -25,6 +29,17 @@ import org.apache.hadoop.fs.FileSystem
 import org.apache.spark.metrics.source.Source
 
 private[spark] class ExecutorSource(val executor: Executor, executorId: String) extends Source {
+
+  val MB = 1024 * 1024
+
+  val pid = Utils.getJvmId()
+
+  /**
+   * Runtime.getRuntime().maxMemory不一定准确，所以修改为从配置中进行读取
+   */
+  val maxMemoryMb =
+    (Utils.memoryStringToMb(SparkEnv.get.conf.get("spark.executor.memory")).toLong * MB).toDouble
+
   private def fileStats(scheme: String) : Option[FileSystem.Statistics] =
     FileSystem.getAllStatistics().filter(s => s.getScheme.equals(scheme)).headOption
 
@@ -38,6 +53,12 @@ private[spark] class ExecutorSource(val executor: Executor, executorId: String) 
   override val metricRegistry = new MetricRegistry()
 
   override val sourceName = "executor"
+
+  // 增加了Executor实际内存使用率输出
+  metricRegistry.register(MetricRegistry.name("memory", "memoryUsedRate"), new Gauge[Int] {
+    override def getValue: Double =
+      ProcfsBasedGetter.getProcessRss(pid) / maxMemoryMb
+  })
 
   // Gauge for executor thread pool's actively executing task counts
   metricRegistry.register(MetricRegistry.name("threadpool", "activeTasks"), new Gauge[Int] {

@@ -17,13 +17,18 @@
 
 package org.apache.spark.deploy.worker
 
+import java.lang.management.ManagementFactory
+
 import com.codahale.metrics.{Gauge, MetricRegistry}
+import com.sun.management.OperatingSystemMXBean
 
 import org.apache.spark.metrics.source.Source
 
 private[spark] class WorkerSource(val worker: Worker) extends Source {
   override val sourceName = "worker"
   override val metricRegistry = new MetricRegistry()
+
+  val osmxb = ManagementFactory.getOperatingSystemMXBean.asInstanceOf[OperatingSystemMXBean]
 
   metricRegistry.register(MetricRegistry.name("executors"), new Gauge[Int] {
     override def getValue: Int = worker.executors.size
@@ -47,5 +52,12 @@ private[spark] class WorkerSource(val worker: Worker) extends Source {
   // Gauge for memory free of this worker
   metricRegistry.register(MetricRegistry.name("memFree_MB"), new Gauge[Int] {
     override def getValue: Int = worker.memoryFree
+  })
+
+  /**
+   * 增加节点空闲内存metric输出，应该等于total - used - cached
+   */
+  metricRegistry.register(MetricRegistry.name("memNodeFree_MB"), new Gauge[Double] {
+    override def getValue: Double = osmxb.getFreePhysicalMemorySize
   })
 }

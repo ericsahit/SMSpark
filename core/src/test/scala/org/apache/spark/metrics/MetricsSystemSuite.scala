@@ -205,8 +205,25 @@ class MetricsSystemSuite extends FunSuite with BeforeAndAfter with PrivateMethod
     driverMetricsSystem.registerSource(source)
     driverMetricsSystem.start()
 
-    Thread.sleep(1000*20)
-
+    //Thread.sleep(1000*20)
+    //
+    /**
+     * 需要不同输出间隔的话，需要多个metricSystem
+     * appSource在appMetricSystem中。
+     * masterSource在MasterMetricSystem中
+     * 节点内存使用，是一个定时输出的值
+     * executor内存使用
+     *
+     * 每一个Source会生成一个csv文件，其中按照定时的间隔进行写入。例如
+     *
+t,value
+1451891183,0
+1451891188,0
+1451891193,0
+1451891198,0
+1451891203,0
+     *
+     */
     val source2 = new Source {
       override val sourceName = "source2: " + System.currentTimeMillis().toString
       override val metricRegistry = new MetricRegistry()

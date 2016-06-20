@@ -28,6 +28,17 @@ import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.deploy.ApplicationDescription
 import org.apache.spark.util.Utils
 
+/**
+ * 当Client提交到Master时候设置startTime，状态为waiting
+ * 当schedule时，给app分配executor时候设置为running
+ * duration，最后一行肯定是整个运行时间
+ * @param startTime
+ * @param id
+ * @param desc
+ * @param submitDate
+ * @param driver
+ * @param defaultCores
+ */
 private[spark] class ApplicationInfo(
     val startTime: Long,
     val id: String,
