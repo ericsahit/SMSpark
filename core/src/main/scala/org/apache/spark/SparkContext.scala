@@ -334,6 +334,8 @@ class SparkContext(config: SparkConf) extends Logging with ExecutorAllocationCli
     .orElse(Option(System.getenv("SPARK_MEM")).map(warnSparkMem))
     .map(Utils.memoryStringToMb)
     .getOrElse(512)
+  // add executor memory parameter to executor
+  conf.set("spark.executor.totalmemory", executorMemory.toString)
 
   // Environment variables to pass to our executors.
   private[spark] val executorEnvs = HashMap[String, String]()

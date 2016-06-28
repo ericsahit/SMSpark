@@ -28,17 +28,16 @@ import org.apache.hadoop.fs.FileSystem
 
 import org.apache.spark.metrics.source.Source
 
-private[spark] class ExecutorSource(val executor: Executor, executorId: String) extends Source {
-
-  val MB = 1024 * 1024
+private[spark] class ExecutorSource(val executor: Executor, executorId: String, memory: Int = 512) extends Source {
 
   val pid = Utils.getJvmId()
 
   /**
    * Runtime.getRuntime().maxMemory不一定准确，所以修改为从配置中进行读取
    */
-  val maxMemoryMb =
-    (Utils.memoryStringToMb(SparkEnv.get.conf.get("spark.executor.memory")).toLong * MB).toDouble
+  val MB = 1024 * 1024
+  val maxMemoryByte = memory.toDouble * MB
+  //  (Utils.memoryStringToMb(SparkEnv.get.conf.get("spark.executor.memory")).toLong * MB).toDouble
 
   private def fileStats(scheme: String) : Option[FileSystem.Statistics] =
     FileSystem.getAllStatistics().filter(s => s.getScheme.equals(scheme)).headOption
@@ -55,9 +54,9 @@ private[spark] class ExecutorSource(val executor: Executor, executorId: String) 
   override val sourceName = "executor"
 
   // 增加了Executor实际内存使用率输出
-  metricRegistry.register(MetricRegistry.name("memory", "memoryUsedRate"), new Gauge[Int] {
+  metricRegistry.register(MetricRegistry.name("memory", "memoryUsedRate"), new Gauge[Double] {
     override def getValue: Double =
-      ProcfsBasedGetter.getProcessRss(pid) / maxMemoryMb
+      ProcfsBasedGetter.getProcessRss(pid) / maxMemoryByte
   })
 
   // Gauge for executor thread pool's actively executing task counts
