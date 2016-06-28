@@ -32,80 +32,20 @@ main:
 [INFO] --- scala-maven-plugin:3.2.0:compile (scala-compile-first) @ spark-core_2.10 ---
 [INFO] Using zinc server for incremental compilation
 [INFO] compiler plugin: BasicArtifact(org.scalamacros,paradise_2.10.4,2.0.1,null)
-[0m[[0minfo[0m] [0mCompiling 437 Scala sources and 44 Java sources to /home/hadoop/develop/spark/core/target/scala-2.10/classes...[0m
-[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/scheduler/local/LocalBackend.scala:89: postfix operator millis should be enabled[0m
-[0m[[33mwarn[0m] [0mby making the implicit value scala.language.postfixOps visible.[0m
-[0m[[33mwarn[0m] [0mThis can be achieved by adding the import clause 'import scala.language.postfixOps'[0m
-[0m[[33mwarn[0m] [0mor by setting the compiler option -language:postfixOps.[0m
-[0m[[33mwarn[0m] [0mSee the Scala docs for value scala.language.postfixOps for a discussion[0m
-[0m[[33mwarn[0m] [0mwhy the feature should be explicitly enabled.[0m
-[0m[[33mwarn[0m] [0m      context.system.scheduler.scheduleOnce(1000 millis, self, ReviveOffers)[0m
-[0m[[33mwarn[0m] [0m                                                 ^[0m
-[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/util/MutableURLClassLoader.scala:26: imported `ParentClassLoader' is permanently hidden by definition of class ParentClassLoader in package util[0m
-[0m[[33mwarn[0m] [0mimport org.apache.spark.util.ParentClassLoader[0m
-[0m[[33mwarn[0m] [0m                             ^[0m
-[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/TaskState.scala:41: match may not be exhaustive.[0m
-[0m[[33mwarn[0m] [0mIt would fail on the following input: TASK_ERROR[0m
-[0m[[33mwarn[0m] [0m  def fromMesos(mesosState: MesosTaskState): TaskState = mesosState match {[0m
-[0m[[33mwarn[0m] [0m                                                         ^[0m
-[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/SparkContext.scala:623: constructor Job in class Job is deprecated: see corresponding Javadoc for more information.[0m
+[0m[[0minfo[0m] [0mCompiling 3 Scala sources and 32 Java sources to /home/hadoop/develop/spark/core/target/scala-2.10/classes...[0m
+[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/SparkContext.scala:625: constructor Job in class Job is deprecated: see corresponding Javadoc for more information.[0m
 [0m[[33mwarn[0m] [0m    val job = new NewHadoopJob(hadoopConfiguration)[0m
 [0m[[33mwarn[0m] [0m              ^[0m
-[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/SparkContext.scala:669: constructor Job in class Job is deprecated: see corresponding Javadoc for more information.[0m
+[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/SparkContext.scala:671: constructor Job in class Job is deprecated: see corresponding Javadoc for more information.[0m
 [0m[[33mwarn[0m] [0m    val job = new NewHadoopJob(hadoopConfiguration)[0m
 [0m[[33mwarn[0m] [0m              ^[0m
-[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/SparkContext.scala:845: constructor Job in class Job is deprecated: see corresponding Javadoc for more information.[0m
+[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/SparkContext.scala:847: constructor Job in class Job is deprecated: see corresponding Javadoc for more information.[0m
 [0m[[33mwarn[0m] [0m    val job = new NewHadoopJob(conf)[0m
 [0m[[33mwarn[0m] [0m              ^[0m
-[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/SparkHadoopWriter.scala:201: constructor TaskID in class TaskID is deprecated: see corresponding Javadoc for more information.[0m
-[0m[[33mwarn[0m] [0m        new TaskAttemptID(new TaskID(jID.value, true, splitID), attemptID))[0m
-[0m[[33mwarn[0m] [0m                          ^[0m
-[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/SparkHadoopWriter.scala:222: method makeQualified in class Path is deprecated: see corresponding Javadoc for more information.[0m
-[0m[[33mwarn[0m] [0m    outputPath.makeQualified(fs)[0m
-[0m[[33mwarn[0m] [0m               ^[0m
-[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/deploy/SparkHadoopUtil.scala:197: method isDir in class FileStatus is deprecated: see corresponding Javadoc for more information.[0m
-[0m[[33mwarn[0m] [0m      val (directories, leaves) = fs.listStatus(path).partition(_.isDir)[0m
-[0m[[33mwarn[0m] [0m                                                                  ^[0m
-[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/deploy/SparkHadoopUtil.scala:202: method isDir in class FileStatus is deprecated: see corresponding Javadoc for more information.[0m
-[0m[[33mwarn[0m] [0m    if (baseStatus.isDir) recurse(basePath) else Array(baseStatus)[0m
-[0m[[33mwarn[0m] [0m                   ^[0m
-[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/deploy/history/FsHistoryProvider.scala:111: method isDir in class FileStatus is deprecated: see corresponding Javadoc for more information.[0m
-[0m[[33mwarn[0m] [0m    if (!fs.getFileStatus(path).isDir) {[0m
-[0m[[33mwarn[0m] [0m                                ^[0m
-[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/deploy/history/FsHistoryProvider.scala:318: method isDir in class FileStatus is deprecated: see corresponding Javadoc for more information.[0m
-[0m[[33mwarn[0m] [0m  private def isLegacyLogDirectory(entry: FileStatus): Boolean = entry.isDir()[0m
-[0m[[33mwarn[0m] [0m                                                                       ^[0m
-[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/input/PortableDataStream.scala:49: method isDir in class FileStatus is deprecated: see corresponding Javadoc for more information.[0m
-[0m[[33mwarn[0m] [0m      if (file.isDir) 0L else file.getLen[0m
-[0m[[33mwarn[0m] [0m               ^[0m
-[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/input/WholeTextFileInputFormat.scala:57: method isDir in class FileStatus is deprecated: see corresponding Javadoc for more information.[0m
-[0m[[33mwarn[0m] [0m      if (file.isDir) 0L else file.getLen[0m
-[0m[[33mwarn[0m] [0m               ^[0m
-[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/mapred/SparkHadoopMapRedUtil.scala:56: constructor TaskAttemptID in class TaskAttemptID is deprecated: see corresponding Javadoc for more information.[0m
-[0m[[33mwarn[0m] [0m    new TaskAttemptID(jtIdentifier, jobId, isMap, taskId, attemptId)[0m
-[0m[[33mwarn[0m] [0m    ^[0m
-[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/rdd/CheckpointRDD.scala:111: method getDefaultReplication in class FileSystem is deprecated: see corresponding Javadoc for more information.[0m
-[0m[[33mwarn[0m] [0m      fs.create(tempOutputPath, false, bufferSize, fs.getDefaultReplication, blockSize)[0m
-[0m[[33mwarn[0m] [0m                                                      ^[0m
-[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/rdd/HadoopRDD.scala:351: constructor TaskID in class TaskID is deprecated: see corresponding Javadoc for more information.[0m
-[0m[[33mwarn[0m] [0m    val taId = new TaskAttemptID(new TaskID(jobID, true, splitId), attemptId)[0m
-[0m[[33mwarn[0m] [0m                                 ^[0m
-[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/rdd/PairRDDFunctions.scala:898: constructor Job in class Job is deprecated: see corresponding Javadoc for more information.[0m
-[0m[[33mwarn[0m] [0m    val job = new NewAPIHadoopJob(hadoopConf)[0m
-[0m[[33mwarn[0m] [0m              ^[0m
-[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/rdd/PairRDDFunctions.scala:966: constructor Job in class Job is deprecated: see corresponding Javadoc for more information.[0m
-[0m[[33mwarn[0m] [0m    val job = new NewAPIHadoopJob(hadoopConf)[0m
-[0m[[33mwarn[0m] [0m              ^[0m
-[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/scheduler/InputFormatInfo.scala:106: constructor Job in class Job is deprecated: see corresponding Javadoc for more information.[0m
-[0m[[33mwarn[0m] [0m    val job = new Job(conf)[0m
-[0m[[33mwarn[0m] [0m              ^[0m
-[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/main/scala/org/apache/spark/smstorage/worker/ExecutorWatcher.scala:117: comparing values of types Unit and Null using `!=' will always yield true[0m
-[0m[[33mwarn[0m] [0m      while ((line = reader.readLine()) != null) {[0m
-[0m[[33mwarn[0m] [0m                                        ^[0m
-[0m[[33mwarn[0m] [0m21 warnings found[0m
+[0m[[33mwarn[0m] [0mthree warnings found[0m
 [0m[[33mwarn[0m] [0mwarning: [options] bootstrap class path not set in conjunction with -source 1.6[0m
 [0m[[33mwarn[0m] [0m1 warning[0m
-[0m[[0minfo[0m] [0mCompile success at May 22, 2016 10:54:46 PM [3:09.794s][0m
+[0m[[0minfo[0m] [0mCompile success at Jun 23, 2016 5:11:30 PM [1:11.723s][0m
 [INFO] 
 [INFO] --- maven-compiler-plugin:3.1:compile (default-compile) @ spark-core_2.10 ---
 [INFO] Changes detected - recompiling the module!
@@ -122,34 +62,7 @@ main:
 [INFO] --- scala-maven-plugin:3.2.0:testCompile (scala-test-compile-first) @ spark-core_2.10 ---
 [INFO] Using zinc server for incremental compilation
 [INFO] compiler plugin: BasicArtifact(org.scalamacros,paradise_2.10.4,2.0.1,null)
-[0m[[0minfo[0m] [0mCompiling 145 Scala sources and 11 Java sources to /home/hadoop/develop/spark/core/target/scala-2.10/test-classes...[0m
-[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/test/scala/org/apache/spark/scheduler/OutputCommitCoordinatorSuite.scala:156: a pure expression does nothing in statement position; you may be omitting necessary parentheses[0m
-[0m[[33mwarn[0m] [0m      0 until rdd.partitions.size, resultHandler, 0)[0m
-[0m[[33mwarn[0m] [0m                                                  ^[0m
-[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/test/scala/org/apache/spark/util/MutableURLClassLoaderSuite.scala:25: imported `Utils' is permanently hidden by definition of object Utils in package util[0m
-[0m[[33mwarn[0m] [0mimport org.apache.spark.util.Utils[0m
-[0m[[33mwarn[0m] [0m                             ^[0m
-[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/test/scala/org/apache/spark/FileSuite.scala:496: constructor Job in class Job is deprecated: see corresponding Javadoc for more information.[0m
-[0m[[33mwarn[0m] [0m    val job = new Job(sc.hadoopConfiguration)[0m
-[0m[[33mwarn[0m] [0m              ^[0m
-[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/test/scala/org/apache/spark/scheduler/EventLoggingListenerSuite.scala:69: method isDir in class FileStatus is deprecated: see corresponding Javadoc for more information.[0m
-[0m[[33mwarn[0m] [0m    assert(!logStatus.isDir)[0m
-[0m[[33mwarn[0m] [0m                      ^[0m
-[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/test/scala/org/apache/spark/scheduler/EventLoggingListenerSuite.scala:73: method isDir in class FileStatus is deprecated: see corresponding Javadoc for more information.[0m
-[0m[[33mwarn[0m] [0m    assert(!fileSystem.getFileStatus(new Path(eventLogger.logPath)).isDir)[0m
-[0m[[33mwarn[0m] [0m                                                                    ^[0m
-[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/test/scala/org/apache/spark/scheduler/ReplayListenerSuite.scala:115: method isDir in class FileStatus is deprecated: see corresponding Javadoc for more information.[0m
-[0m[[33mwarn[0m] [0m    assert(!eventLog.isDir)[0m
-[0m[[33mwarn[0m] [0m                     ^[0m
-[0m[[33mwarn[0m] [0m/home/hadoop/develop/spark/core/src/test/scala/org/apache/spark/scheduler/TaskContextSuite.scala:89: method attemptId in class TaskContext is deprecated: use attemptNumber[0m
-[0m[[33mwarn[0m] [0m      Seq(TaskContext.get().attemptId).iterator[0m
-[0m[[33mwarn[0m] [0m                            ^[0m
-[0m[[33mwarn[0m] [0m7 warnings found[0m
-[0m[[33mwarn[0m] [0mwarning: [options] bootstrap class path not set in conjunction with -source 1.6[0m
-[0m[[33mwarn[0m] [0mNote: /home/hadoop/develop/spark/core/src/test/java/org/apache/spark/JavaAPISuite.java uses or overrides a deprecated API.[0m
-[0m[[33mwarn[0m] [0mNote: Recompile with -Xlint:deprecation for details.[0m
-[0m[[33mwarn[0m] [0m1 warning[0m
-[0m[[0minfo[0m] [0mCompile success at May 22, 2016 10:56:38 PM [1:44.256s][0m
+[0m[[0minfo[0m] [0mCompile success at Jun 23, 2016 5:11:40 PM [2.222s][0m
 [INFO] 
 [INFO] --- maven-compiler-plugin:3.1:testCompile (default-testCompile) @ spark-core_2.10 ---
 [INFO] Nothing to compile - all classes are up to date
@@ -567,7 +480,7 @@ object HistoryServer extends Logging {
 [INFO] ------------------------------------------------------------------------
 [INFO] BUILD SUCCESS
 [INFO] ------------------------------------------------------------------------
-[INFO] Total time: 7:23.508s
-[INFO] Finished at: Sun May 22 22:58:40 CST 2016
-[INFO] Final Memory: 47M/723M
+[INFO] Total time: 3:31.502s
+[INFO] Finished at: Thu Jun 23 17:13:21 CST 2016
+[INFO] Final Memory: 48M/722M
 [INFO] ------------------------------------------------------------------------

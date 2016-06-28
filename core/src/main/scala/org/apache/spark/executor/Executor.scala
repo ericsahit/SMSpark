@@ -81,7 +81,9 @@ private[spark] class Executor(
   // Start worker thread pool
   val threadPool = Utils.newDaemonCachedThreadPool("Executor task launch worker")
 
-  val executorSource = new ExecutorSource(this, executorId)
+  val executorSource = new ExecutorSource(this,
+    executorId,
+    conf.getInt("spark.executor.totalmemory", 512))
 
   if (!isLocal) {
     env.metricsSystem.registerSource(executorSource)
